@@ -2,4 +2,20 @@
 
 body {
   margin: 0;
+  background: #09090b;
+}
+
+.input {
+  width: 100%;
+  border-radius: 0.75rem;
+  background: #18181b;
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  color: white;
+  padding: 0.9rem 1rem;
+  outline: none;
+}
+
+.input:focus {
+  border-color: #a855f7;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.25);
 }

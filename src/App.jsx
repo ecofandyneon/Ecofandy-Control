@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Login from "./Pages/Login";
-import Dashboard from "./Pages/Dashboard";
+import AppRoutes from "./routes/AppRoutes";
 
 function App() {
   const [logueado, setLogueado] = useState(false);
@@ -8,7 +8,7 @@ function App() {
   return (
     <>
       {logueado ? (
-        <Dashboard />
+        <AppRoutes />
       ) : (
         <Login onLogin={() => setLogueado(true)} />
       )}
