@@ -1,9 +1,11 @@
 function EcoInput({
   label,
+  name,
   value,
   onChange,
   placeholder = "",
   type = "text",
+  autoComplete = "off",
 }) {
   return (
     <div className="space-y-2">
@@ -14,10 +16,12 @@ function EcoInput({
       )}
 
       <input
+        name={name}
         type={type}
         value={value}
         onChange={onChange}
         placeholder={placeholder}
+        autoComplete={autoComplete}
         className="
           w-full
           bg-zinc-900

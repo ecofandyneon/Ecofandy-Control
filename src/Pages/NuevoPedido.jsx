@@ -156,7 +156,7 @@ function NuevoPedido() {
                 label="WhatsApp"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="7771234567"
+                placeholder="0000000000"
               />
             </div>
           </EcoCard>
