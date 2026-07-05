@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { Link } from "react-router-dom";
 import { db } from "../Services/firebase";
 
 function Proyectos() {
@@ -38,6 +39,7 @@ function Proyectos() {
               <th className="p-4">Proyecto</th>
               <th className="p-4">WhatsApp</th>
               <th className="p-4">Estado</th>
+              <th className="p-4">Acciones</th>
             </tr>
           </thead>
 
@@ -45,25 +47,38 @@ function Proyectos() {
             {proyectos.map((proyecto) => (
               <tr
                 key={proyecto.id}
-                className="border-t border-zinc-800 hover:bg-zinc-800"
+                className="border-t border-zinc-800 hover:bg-zinc-800 transition"
               >
                 <td className="p-4 font-bold text-purple-400">
                   {proyecto.codigo || "Sin código"}
                 </td>
+
                 <td className="p-4">{proyecto.cliente}</td>
+
                 <td className="p-4">{proyecto.proyecto}</td>
-                <td className="p-4">{proyecto.whatsapp}</td>
+
+                <td className="p-4">{proyecto.whatsapp || "Sin WhatsApp"}</td>
+
                 <td className="p-4">
                   <span className="bg-purple-600/20 text-purple-300 px-3 py-1 rounded-full text-sm">
-                    {proyecto.estado}
+                    {proyecto.estado || "Sin estado"}
                   </span>
+                </td>
+
+                <td className="p-4">
+                  <Link
+                    to={`/proyectos/${proyecto.id}`}
+                    className="text-purple-400 hover:text-purple-300 font-bold"
+                  >
+                    Abrir
+                  </Link>
                 </td>
               </tr>
             ))}
 
             {proyectos.length === 0 && (
               <tr>
-                <td className="p-4 text-zinc-400" colSpan="5">
+                <td className="p-4 text-zinc-400" colSpan="6">
                   Aún no hay proyectos registrados.
                 </td>
               </tr>
