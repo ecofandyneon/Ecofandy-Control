@@ -17,6 +17,8 @@ function DetalleProyecto() {
   const [estado, setEstado] = useState("Idea recibida");
   const [precio, setPrecio] = useState("");
   const [anticipo, setAnticipo] = useState("");
+  const [estadoPago, setEstadoPago] = useState("Pendiente");
+
   const [fechaEntrega, setFechaEntrega] = useState("");
   const [tipoEntrega, setTipoEntrega] = useState("Recoge en taller");
   const [notas, setNotas] = useState("");
@@ -39,6 +41,8 @@ function DetalleProyecto() {
         setEstado(data.estado || "Idea recibida");
         setPrecio(data.precio || "");
         setAnticipo(data.anticipo || "");
+        setEstadoPago(data.estadoPago || "Pendiente");
+
         setFechaEntrega(data.fechaEntrega || "");
         setTipoEntrega(data.tipoEntrega || "Recoge en taller");
         setNotas(data.notas || "");
@@ -49,63 +53,6 @@ function DetalleProyecto() {
   }, [id]);
 
   const saldo = Number(precio || 0) - Number(anticipo || 0);
-
-  const limpiarWhatsapp = (numero) => {
-    return numero?.replace(/\D/g, "") || "";
-  };
-
-  const abrirWhatsapp = () => {
-    const numero = limpiarWhatsapp(whatsapp);
-
-    if (!numero) {
-      Swal.fire({
-        icon: "warning",
-        title: "Sin WhatsApp",
-        text: "Este proyecto no tiene número de WhatsApp.",
-        confirmButtonColor: "#7C3AED",
-      });
-      return;
-    }
-
-    const mensaje = `Hola ${cliente} 😊
-
-Te compartimos el avance de tu proyecto:
-
-Folio: ${proyecto.codigo || "Sin código"}
-Proyecto: ${nombreProyecto}
-Estado actual: ${estado}
-
-Gracias por confiar en Ecofandy Neón.
-ILUMINAMOS TUS IDEAS 💜`;
-
-    window.open(
-      `https://wa.me/52${numero}?text=${encodeURIComponent(mensaje)}`,
-      "_blank"
-    );
-  };
-
-  const copiarResumen = async () => {
-    const resumen = `Proyecto ${proyecto.codigo || "Sin código"}
-
-Cliente: ${cliente}
-WhatsApp: ${whatsapp}
-Proyecto: ${nombreProyecto}
-Estado: ${estado}
-Precio: $${Number(precio || 0).toLocaleString("es-MX")}
-Anticipo: $${Number(anticipo || 0).toLocaleString("es-MX")}
-Saldo: $${saldo.toLocaleString("es-MX")}
-Fecha compromiso: ${fechaEntrega || "Sin fecha"}
-Entrega: ${tipoEntrega}`;
-
-    await navigator.clipboard.writeText(resumen);
-
-    Swal.fire({
-      icon: "success",
-      title: "Resumen copiado",
-      text: "Ya puedes pegarlo en WhatsApp o donde lo necesites.",
-      confirmButtonColor: "#7C3AED",
-    });
-  };
 
   const guardarCambios = async () => {
     try {
@@ -120,21 +67,7 @@ Entrega: ${tipoEntrega}`;
         precio: Number(precio || 0),
         anticipo: Number(anticipo || 0),
         saldo,
-        fechaEntrega,
-        tipoEntrega,
-        notas,
-      });
-
-      setProyecto({
-        ...proyecto,
-        cliente,
-        whatsapp,
-        proyecto: nombreProyecto,
-        descripcion,
-        estado,
-        precio: Number(precio || 0),
-        anticipo: Number(anticipo || 0),
-        saldo,
+        estadoPago: saldo <= 0 ? "Liquidado" : estadoPago,
         fechaEntrega,
         tipoEntrega,
         notas,
@@ -156,6 +89,11 @@ Entrega: ${tipoEntrega}`;
         confirmButtonColor: "#7C3AED",
       });
     }
+  };
+
+  const marcarLiquidado = () => {
+    setAnticipo(precio);
+    setEstadoPago("Liquidado");
   };
 
   if (!proyecto) {
@@ -187,40 +125,26 @@ Entrega: ${tipoEntrega}`;
             Información
           </h2>
 
-          <label className="text-zinc-400 text-sm">Cliente</label>
           <input
-            className="input mt-2 mb-4"
+            className="input mb-4"
             value={cliente}
             onChange={(e) => setCliente(e.target.value)}
+            placeholder="Cliente"
           />
 
-          <label className="text-zinc-400 text-sm">WhatsApp</label>
           <input
-            className="input mt-2 mb-4"
+            className="input mb-4"
             value={whatsapp}
             onChange={(e) => setWhatsapp(e.target.value)}
+            placeholder="WhatsApp"
           />
 
-          <label className="text-zinc-400 text-sm">Nombre del proyecto</label>
           <input
-            className="input mt-2 mb-4"
+            className="input mb-4"
             value={nombreProyecto}
             onChange={(e) => setNombreProyecto(e.target.value)}
+            placeholder="Nombre del proyecto"
           />
-
-          <button
-            onClick={abrirWhatsapp}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl mb-3"
-          >
-            📱 Abrir WhatsApp
-          </button>
-
-          <button
-            onClick={copiarResumen}
-            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl"
-          >
-            📋 Copiar resumen
-          </button>
         </div>
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
@@ -228,30 +152,47 @@ Entrega: ${tipoEntrega}`;
             Finanzas
           </h2>
 
-          <label className="text-zinc-400 text-sm">Precio total</label>
+          <label className="text-zinc-400 text-sm">Precio total del trabajo</label>
           <input
             className="input mt-2 mb-4"
             type="number"
             value={precio}
             onChange={(e) => setPrecio(e.target.value)}
-            placeholder="0"
           />
 
-          <label className="text-zinc-400 text-sm">Anticipo</label>
+          <label className="text-zinc-400 text-sm">Anticipo / Pagado</label>
           <input
             className="input mt-2 mb-4"
             type="number"
             value={anticipo}
             onChange={(e) => setAnticipo(e.target.value)}
-            placeholder="0"
           />
 
-          <div className="bg-purple-600/20 text-purple-300 rounded-xl p-4 mt-2">
+          <div className="bg-purple-600/20 text-purple-300 rounded-xl p-4 mb-4">
             <p className="text-sm">Saldo pendiente</p>
             <p className="text-3xl font-bold">
-              ${saldo.toLocaleString("es-MX")}
+              ${Math.max(saldo, 0).toLocaleString("es-MX")}
             </p>
           </div>
+
+          <div className="mb-4">
+            <p className="text-zinc-400 text-sm">Estado de pago</p>
+            <p
+              className={`mt-2 font-bold ${
+                saldo <= 0 ? "text-green-400" : "text-yellow-400"
+              }`}
+            >
+              {saldo <= 0 ? "Liquidado" : estadoPago}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={marcarLiquidado}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl"
+          >
+            ✅ Marcar como liquidado
+          </button>
         </div>
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
@@ -259,9 +200,8 @@ Entrega: ${tipoEntrega}`;
             Producción y entrega
           </h2>
 
-          <label className="text-zinc-400 text-sm">Estado</label>
           <select
-            className="input mt-2 mb-4"
+            className="input mb-4"
             value={estado}
             onChange={(e) => setEstado(e.target.value)}
           >
@@ -277,17 +217,15 @@ Entrega: ${tipoEntrega}`;
             <option>Liquidado</option>
           </select>
 
-          <label className="text-zinc-400 text-sm">Fecha compromiso</label>
           <input
-            className="input mt-2 mb-4"
+            className="input mb-4"
             type="date"
             value={fechaEntrega}
             onChange={(e) => setFechaEntrega(e.target.value)}
           />
 
-          <label className="text-zinc-400 text-sm">Tipo de entrega</label>
           <select
-            className="input mt-2"
+            className="input"
             value={tipoEntrega}
             onChange={(e) => setTipoEntrega(e.target.value)}
           >
@@ -307,7 +245,6 @@ Entrega: ${tipoEntrega}`;
             className="input min-h-32"
             value={descripcion}
             onChange={(e) => setDescripcion(e.target.value)}
-            placeholder="Descripción del proyecto"
           />
         </div>
 
@@ -320,14 +257,13 @@ Entrega: ${tipoEntrega}`;
             className="input min-h-32"
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
-            placeholder="Notas internas del proyecto"
           />
         </div>
       </div>
 
       <button
         onClick={guardarCambios}
-        className="mt-8 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(124,58,237,0.5)]"
+        className="mt-8 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl"
       >
         💜 Guardar cambios
       </button>
