@@ -8,6 +8,12 @@ function DetalleProyecto() {
   const { id } = useParams();
 
   const [proyecto, setProyecto] = useState(null);
+
+  const [cliente, setCliente] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
+  const [nombreProyecto, setNombreProyecto] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+
   const [estado, setEstado] = useState("Idea recibida");
   const [precio, setPrecio] = useState("");
   const [anticipo, setAnticipo] = useState("");
@@ -24,6 +30,12 @@ function DetalleProyecto() {
         const data = { id: docSnap.id, ...docSnap.data() };
 
         setProyecto(data);
+
+        setCliente(data.cliente || "");
+        setWhatsapp(data.whatsapp || "");
+        setNombreProyecto(data.proyecto || "");
+        setDescripcion(data.descripcion || "");
+
         setEstado(data.estado || "Idea recibida");
         setPrecio(data.precio || "");
         setAnticipo(data.anticipo || "");
@@ -38,11 +50,72 @@ function DetalleProyecto() {
 
   const saldo = Number(precio || 0) - Number(anticipo || 0);
 
+  const limpiarWhatsapp = (numero) => {
+    return numero?.replace(/\D/g, "") || "";
+  };
+
+  const abrirWhatsapp = () => {
+    const numero = limpiarWhatsapp(whatsapp);
+
+    if (!numero) {
+      Swal.fire({
+        icon: "warning",
+        title: "Sin WhatsApp",
+        text: "Este proyecto no tiene número de WhatsApp.",
+        confirmButtonColor: "#7C3AED",
+      });
+      return;
+    }
+
+    const mensaje = `Hola ${cliente} 😊
+
+Te compartimos el avance de tu proyecto:
+
+Folio: ${proyecto.codigo || "Sin código"}
+Proyecto: ${nombreProyecto}
+Estado actual: ${estado}
+
+Gracias por confiar en Ecofandy Neón.
+ILUMINAMOS TUS IDEAS 💜`;
+
+    window.open(
+      `https://wa.me/52${numero}?text=${encodeURIComponent(mensaje)}`,
+      "_blank"
+    );
+  };
+
+  const copiarResumen = async () => {
+    const resumen = `Proyecto ${proyecto.codigo || "Sin código"}
+
+Cliente: ${cliente}
+WhatsApp: ${whatsapp}
+Proyecto: ${nombreProyecto}
+Estado: ${estado}
+Precio: $${Number(precio || 0).toLocaleString("es-MX")}
+Anticipo: $${Number(anticipo || 0).toLocaleString("es-MX")}
+Saldo: $${saldo.toLocaleString("es-MX")}
+Fecha compromiso: ${fechaEntrega || "Sin fecha"}
+Entrega: ${tipoEntrega}`;
+
+    await navigator.clipboard.writeText(resumen);
+
+    Swal.fire({
+      icon: "success",
+      title: "Resumen copiado",
+      text: "Ya puedes pegarlo en WhatsApp o donde lo necesites.",
+      confirmButtonColor: "#7C3AED",
+    });
+  };
+
   const guardarCambios = async () => {
     try {
       const docRef = doc(db, "proyectos", id);
 
       await updateDoc(docRef, {
+        cliente,
+        whatsapp,
+        proyecto: nombreProyecto,
+        descripcion,
         estado,
         precio: Number(precio || 0),
         anticipo: Number(anticipo || 0),
@@ -54,6 +127,10 @@ function DetalleProyecto() {
 
       setProyecto({
         ...proyecto,
+        cliente,
+        whatsapp,
+        proyecto: nombreProyecto,
+        descripcion,
         estado,
         precio: Number(precio || 0),
         anticipo: Number(anticipo || 0),
@@ -110,30 +187,41 @@ function DetalleProyecto() {
             Información
           </h2>
 
-          <p><strong>Cliente:</strong> {proyecto.cliente}</p>
-          <p><strong>WhatsApp:</strong> {proyecto.whatsapp}</p>
-          <p><strong>Proyecto:</strong> {proyecto.proyecto}</p>
+          <label className="text-zinc-400 text-sm">Cliente</label>
+          <input
+            className="input mt-2 mb-4"
+            value={cliente}
+            onChange={(e) => setCliente(e.target.value)}
+          />
 
-          <div className="mt-5">
-            <label className="text-zinc-400 text-sm">Estado</label>
-            <select
-              className="input mt-2"
-              value={estado}
-              onChange={(e) => setEstado(e.target.value)}
-            >
-              <option>Idea recibida</option>
-              <option>Diseño / Render</option>
-              <option>Aprobado</option>
-              <option>Corte</option>
-              <option>Armado LED</option>
-              <option>Pruebas</option>
-              <option>Finalizado</option>
-              <option>Empaque</option>
-              <option>Entregado</option>
-              <option>Liquidado</option>
-            </select>
-          </div>
-          </div>
+          <label className="text-zinc-400 text-sm">WhatsApp</label>
+          <input
+            className="input mt-2 mb-4"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.value)}
+          />
+
+          <label className="text-zinc-400 text-sm">Nombre del proyecto</label>
+          <input
+            className="input mt-2 mb-4"
+            value={nombreProyecto}
+            onChange={(e) => setNombreProyecto(e.target.value)}
+          />
+
+          <button
+            onClick={abrirWhatsapp}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl mb-3"
+          >
+            📱 Abrir WhatsApp
+          </button>
+
+          <button
+            onClick={copiarResumen}
+            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-xl"
+          >
+            📋 Copiar resumen
+          </button>
+        </div>
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
           <h2 className="text-xl font-bold text-purple-400 mb-4">
@@ -168,8 +256,26 @@ function DetalleProyecto() {
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
           <h2 className="text-xl font-bold text-purple-400 mb-4">
-            Entrega
+            Producción y entrega
           </h2>
+
+          <label className="text-zinc-400 text-sm">Estado</label>
+          <select
+            className="input mt-2 mb-4"
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+          >
+            <option>Idea recibida</option>
+            <option>Diseño / Render</option>
+            <option>Aprobado</option>
+            <option>Corte</option>
+            <option>Armado LED</option>
+            <option>Pruebas</option>
+            <option>Finalizado</option>
+            <option>Empaque</option>
+            <option>Entregado</option>
+            <option>Liquidado</option>
+          </select>
 
           <label className="text-zinc-400 text-sm">Fecha compromiso</label>
           <input
@@ -197,9 +303,12 @@ function DetalleProyecto() {
             Descripción
           </h2>
 
-          <p className="text-zinc-300">
-            {proyecto.descripcion || "Sin descripción"}
-          </p>
+          <textarea
+            className="input min-h-32"
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            placeholder="Descripción del proyecto"
+          />
         </div>
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
@@ -226,4 +335,4 @@ function DetalleProyecto() {
   );
 }
 
-export default DetalleProyecto
+export default DetalleProyecto;
