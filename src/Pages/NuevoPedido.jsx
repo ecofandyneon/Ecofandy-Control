@@ -14,26 +14,44 @@ import Swal from "sweetalert2";
 import EcoCard from "../Components/NeonUI/EcoCard";
 import EcoButton from "../Components/NeonUI/EcoButton";
 import EcoInput from "../Components/NeonUI/EcoInput";
+import EcoSelect from "../Components/NeonUI/EcoSelect";
+import ClienteSelector from "../Components/Clientes/ClienteSelector";
 
 function NuevoPedido() {
+  const [clienteId, setClienteId] = useState("");
   const [cliente, setCliente] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [correo, setCorreo] = useState("");
   const [proyecto, setProyecto] = useState("");
   const [producto, setProducto] = useState("Neón LED");
   const [servicio, setServicio] = useState("Fabricación");
   const [medidas, setMedidas] = useState("");
   const [prioridad, setPrioridad] = useState("Normal");
   const [fechaEntrega, setFechaEntrega] = useState("");
-  const [precio, setPrecio] = useState("");
+
+  const [subtotal, setSubtotal] = useState("");
+  const [requiereFactura, setRequiereFactura] = useState(false);
   const [anticipo, setAnticipo] = useState("");
+
   const [tipoEntrega, setTipoEntrega] = useState("Recoge en taller");
   const [instalacion, setInstalacion] = useState("No");
   const [garantia, setGarantia] = useState("No");
   const [descripcion, setDescripcion] = useState("");
 
-  const saldo = Number(precio || 0) - Number(anticipo || 0);
+  const iva = requiereFactura ? Number(subtotal || 0) * 0.16 : 0;
+  const total = Number(subtotal || 0) + iva;
+  const saldo = total - Number(anticipo || 0);
+
+  const seleccionarCliente = (clienteSeleccionado) => {
+    setClienteId(clienteSeleccionado.id);
+    setCliente(clienteSeleccionado.nombre || "");
+    setWhatsapp(clienteSeleccionado.whatsapp || "");
+    setCorreo(clienteSeleccionado.correo || "");
+  };
 
   const obtenerOCrearCliente = async () => {
+    if (clienteId) return clienteId;
+
     const nombreCliente = cliente.trim();
     const whatsappLimpio = whatsapp.replace(/\D/g, "");
 
@@ -55,7 +73,11 @@ function NuevoPedido() {
     const nuevoCliente = await addDoc(clientesRef, {
       nombre: nombreCliente,
       whatsapp: whatsappLimpio,
+      correo,
       ciudad: "",
+      cp: "",
+      rfc: "",
+      usoCfdi: "",
       notas: "",
       creadoEn: serverTimestamp(),
     });
@@ -67,7 +89,7 @@ function NuevoPedido() {
     e.preventDefault();
 
     try {
-      const clienteId = await obtenerOCrearCliente();
+      const idClienteFinal = await obtenerOCrearCliente();
 
       const snapshot = await getCountFromServer(collection(db, "proyectos"));
       const totalProyectos = snapshot.data().count + 1;
@@ -75,9 +97,10 @@ function NuevoPedido() {
 
       await addDoc(collection(db, "proyectos"), {
         codigo,
-        clienteId,
+        clienteId: idClienteFinal,
         cliente: cliente.trim(),
         whatsapp: whatsapp.replace(/\D/g, ""),
+        correo,
         proyecto,
         producto,
         servicio,
@@ -85,10 +108,16 @@ function NuevoPedido() {
         prioridad,
         estado: "Idea recibida",
         fechaEntrega,
-        precio: Number(precio || 0),
+
+        subtotal: Number(subtotal || 0),
+        requiereFactura,
+        iva,
+        total,
+        precio: total,
         anticipo: Number(anticipo || 0),
         saldo,
         estadoPago: saldo <= 0 ? "Liquidado" : "Pendiente",
+
         tipoEntrega,
         instalacion,
         garantia,
@@ -103,15 +132,18 @@ function NuevoPedido() {
         confirmButtonColor: "#7C3AED",
       });
 
+      setClienteId("");
       setCliente("");
       setWhatsapp("");
+      setCorreo("");
       setProyecto("");
       setProducto("Neón LED");
       setServicio("Fabricación");
       setMedidas("");
       setPrioridad("Normal");
       setFechaEntrega("");
-      setPrecio("");
+      setSubtotal("");
+      setRequiereFactura(false);
       setAnticipo("");
       setTipoEntrega("Recoge en taller");
       setInstalacion("No");
@@ -145,18 +177,34 @@ function NuevoPedido() {
             </h2>
 
             <div className="space-y-4">
+              <ClienteSelector onSelect={seleccionarCliente} />
+
               <EcoInput
                 label="Nombre del cliente"
                 value={cliente}
-                onChange={(e) => setCliente(e.target.value)}
+                onChange={(e) => {
+                  setCliente(e.target.value);
+                  setClienteId("");
+                }}
                 placeholder="Ej. Bella Lashes"
               />
 
               <EcoInput
                 label="WhatsApp"
                 value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="0000000000"
+                onChange={(e) => {
+                  setWhatsapp(e.target.value);
+                  setClienteId("");
+                }}
+                placeholder="7771234567"
+              />
+
+              <EcoInput
+                label="Correo"
+                type="email"
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
+                placeholder="cliente@correo.com"
               />
             </div>
           </EcoCard>
@@ -174,37 +222,31 @@ function NuevoPedido() {
                 placeholder="Ej. Letrero recepción"
               />
 
-              <div>
-                <label className="text-zinc-300 font-semibold">Producto</label>
-                <select
-                  className="input mt-2"
-                  value={producto}
-                  onChange={(e) => setProducto(e.target.value)}
-                >
-                  <option>Neón LED</option>
-                  <option>Letras Corpóreas</option>
-                  <option>Caja de Luz</option>
-                  <option>Caja Bandera</option>
-                  <option>Vinil</option>
-                  <option>Glorificador LED</option>
-                  <option>Glorificador Neón</option>
-                  <option>Otro</option>
-                </select>
-              </div>
+              <EcoSelect
+                label="Producto"
+                value={producto}
+                onChange={(e) => setProducto(e.target.value)}
+              >
+                <option>Neón LED</option>
+                <option>Letras Corpóreas</option>
+                <option>Caja de Luz</option>
+                <option>Caja Bandera</option>
+                <option>Vinil</option>
+                <option>Glorificador LED</option>
+                <option>Glorificador Neón</option>
+                <option>Otro</option>
+              </EcoSelect>
 
-              <div>
-                <label className="text-zinc-300 font-semibold">Servicio</label>
-                <select
-                  className="input mt-2"
-                  value={servicio}
-                  onChange={(e) => setServicio(e.target.value)}
-                >
-                  <option>Fabricación</option>
-                  <option>Reparación</option>
-                  <option>Restauración</option>
-                  <option>Mantenimiento</option>
-                </select>
-              </div>
+              <EcoSelect
+                label="Servicio"
+                value={servicio}
+                onChange={(e) => setServicio(e.target.value)}
+              >
+                <option>Fabricación</option>
+                <option>Reparación</option>
+                <option>Restauración</option>
+                <option>Mantenimiento</option>
+              </EcoSelect>
             </div>
           </EcoCard>
 
@@ -221,19 +263,16 @@ function NuevoPedido() {
                 placeholder="Ej. 120 x 60 cm"
               />
 
-              <div>
-                <label className="text-zinc-300 font-semibold">Prioridad</label>
-                <select
-                  className="input mt-2"
-                  value={prioridad}
-                  onChange={(e) => setPrioridad(e.target.value)}
-                >
-                  <option>Baja</option>
-                  <option>Normal</option>
-                  <option>Alta</option>
-                  <option>Urgente</option>
-                </select>
-              </div>
+              <EcoSelect
+                label="Prioridad"
+                value={prioridad}
+                onChange={(e) => setPrioridad(e.target.value)}
+              >
+                <option>Baja</option>
+                <option>Normal</option>
+                <option>Alta</option>
+                <option>Urgente</option>
+              </EcoSelect>
 
               <EcoInput
                 label="Fecha de entrega"
@@ -251,15 +290,38 @@ function NuevoPedido() {
 
             <div className="space-y-4">
               <EcoInput
-                label="Precio total"
+                label="Subtotal"
                 type="number"
-                value={precio}
-                onChange={(e) => setPrecio(e.target.value)}
+                value={subtotal}
+                onChange={(e) => setSubtotal(e.target.value)}
                 placeholder="0"
               />
 
+              <label className="flex items-center gap-3 text-zinc-300 font-semibold bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+                <input
+                  type="checkbox"
+                  checked={requiereFactura}
+                  onChange={(e) => setRequiereFactura(e.target.checked)}
+                />
+                Requiere factura (+16% IVA)
+              </label>
+
+              <div className="bg-zinc-950 rounded-xl p-4 space-y-2 border border-zinc-800">
+                <div className="flex justify-between">
+                  <span className="text-zinc-400">IVA</span>
+                  <strong>${iva.toLocaleString("es-MX")}</strong>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-zinc-400">Total</span>
+                  <strong className="text-green-400">
+                    ${total.toLocaleString("es-MX")}
+                  </strong>
+                </div>
+              </div>
+
               <EcoInput
-                label="Anticipo"
+                label="Anticipo / Pagado"
                 type="number"
                 value={anticipo}
                 onChange={(e) => setAnticipo(e.target.value)}
@@ -269,7 +331,7 @@ function NuevoPedido() {
               <div className="bg-purple-600/20 text-purple-300 rounded-xl p-4">
                 <p className="text-sm">Saldo pendiente</p>
                 <p className="text-3xl font-bold">
-                  ${saldo.toLocaleString("es-MX")}
+                  ${Math.max(saldo, 0).toLocaleString("es-MX")}
                 </p>
               </div>
             </div>
@@ -281,49 +343,34 @@ function NuevoPedido() {
             </h2>
 
             <div className="space-y-4">
-              <div>
-                <label className="text-zinc-300 font-semibold">
-                  Tipo de entrega
-                </label>
-                <select
-                  className="input mt-2"
-                  value={tipoEntrega}
-                  onChange={(e) => setTipoEntrega(e.target.value)}
-                >
-                  <option>Recoge en taller</option>
-                  <option>Entrega local</option>
-                  <option>Envío</option>
-                  <option>Instalación</option>
-                </select>
-              </div>
+              <EcoSelect
+                label="Tipo de entrega"
+                value={tipoEntrega}
+                onChange={(e) => setTipoEntrega(e.target.value)}
+              >
+                <option>Recoge en taller</option>
+                <option>Entrega local</option>
+                <option>Envío</option>
+                <option>Instalación</option>
+              </EcoSelect>
 
-              <div>
-                <label className="text-zinc-300 font-semibold">
-                  ¿Requiere instalación?
-                </label>
-                <select
-                  className="input mt-2"
-                  value={instalacion}
-                  onChange={(e) => setInstalacion(e.target.value)}
-                >
-                  <option>No</option>
-                  <option>Sí</option>
-                </select>
-              </div>
+              <EcoSelect
+                label="¿Requiere instalación?"
+                value={instalacion}
+                onChange={(e) => setInstalacion(e.target.value)}
+              >
+                <option>No</option>
+                <option>Sí</option>
+              </EcoSelect>
 
-              <div>
-                <label className="text-zinc-300 font-semibold">
-                  ¿Tiene garantía?
-                </label>
-                <select
-                  className="input mt-2"
-                  value={garantia}
-                  onChange={(e) => setGarantia(e.target.value)}
-                >
-                  <option>No</option>
-                  <option>Sí</option>
-                </select>
-              </div>
+              <EcoSelect
+                label="¿Tiene garantía?"
+                value={garantia}
+                onChange={(e) => setGarantia(e.target.value)}
+              >
+                <option>No</option>
+                <option>Sí</option>
+              </EcoSelect>
             </div>
           </EcoCard>
 
