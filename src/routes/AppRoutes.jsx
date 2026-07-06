@@ -10,6 +10,7 @@ import Produccion from "../Pages/Produccion";
 import Configuracion from "../Pages/Configuracion";
 import Proyectos from "../Pages/Proyectos";
 import DetalleProyecto from "../Pages/DetalleProyecto";
+import RenderAI from "../Pages/RenderAI";
 
 function AppRoutes() {
   return (
@@ -23,6 +24,7 @@ function AppRoutes() {
           <Route path="/produccion" element={<Produccion />} />
           <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/proyectos/:id" element={<DetalleProyecto />} />
+          <Route path="/render-ai" element={<RenderAI />} />
         </Route>
       </Routes>
     </BrowserRouter>

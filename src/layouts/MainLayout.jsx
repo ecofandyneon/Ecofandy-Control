@@ -9,6 +9,7 @@ function MainLayout() {
     { path: "/clientes", label: "Clientes", icon: "👥" },
     { path: "/produccion", label: "Producción", icon: "🏭" },
     { path: "/configuracion", label: "Configuración", icon: "⚙️" },
+    { path: "/render-ai", label: "Render AI", icon: "🎨" },
   ];
 
   return (
