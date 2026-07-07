@@ -13,6 +13,8 @@ import DetalleProyecto from "../Pages/DetalleProyecto";
 import RenderAI from "../Pages/RenderAI";
 import BibliotecaProductos from "../Pages/BibliotecaProductos";
 import RecetaNeonLED from "../Pages/RecetaNeonLED";
+import Articulos from "../Pages/Articulos";
+import CotizadorNeon from "../Pages/CotizadorNeon";
 
 function AppRoutes() {
   return (
@@ -29,6 +31,8 @@ function AppRoutes() {
           <Route path="/render-ai" element={<RenderAI />} />
           <Route path="/biblioteca-productos" element={<BibliotecaProductos />} />
           <Route path="/biblioteca-productos/neon-led" element={<RecetaNeonLED />} />
+          <Route path="/articulos" element={<Articulos />} />
+          <Route path="/cotizador-neon" element={<CotizadorNeon />} />
         </Route>
       </Routes>
     </BrowserRouter>

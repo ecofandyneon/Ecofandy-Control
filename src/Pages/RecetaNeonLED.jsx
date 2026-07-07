@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import ListaEditable from "../Components/UI/ListaEditable";
 
 function RecetaNeonLED() {
   return (

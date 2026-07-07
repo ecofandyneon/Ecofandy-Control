@@ -11,6 +11,8 @@ function MainLayout() {
     { path: "/configuracion", label: "Configuración", icon: "⚙️" },
     { path: "/render-ai", label: "Render AI", icon: "🎨" },
     { path: "/biblioteca-productos", label: "Biblioteca", icon: "📚" },
+    { path: "/articulos", label: "Artículos", icon: "📦" },
+    { path: "/cotizador-neon", label: "Cotizador Neón", icon: "🧠" },
   ];
 
   return (
