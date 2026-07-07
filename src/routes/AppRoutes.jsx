@@ -11,6 +11,8 @@ import Configuracion from "../Pages/Configuracion";
 import Proyectos from "../Pages/Proyectos";
 import DetalleProyecto from "../Pages/DetalleProyecto";
 import RenderAI from "../Pages/RenderAI";
+import BibliotecaProductos from "../Pages/BibliotecaProductos";
+import RecetaNeonLED from "../Pages/RecetaNeonLED";
 
 function AppRoutes() {
   return (
@@ -25,6 +27,8 @@ function AppRoutes() {
           <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/proyectos/:id" element={<DetalleProyecto />} />
           <Route path="/render-ai" element={<RenderAI />} />
+          <Route path="/biblioteca-productos" element={<BibliotecaProductos />} />
+          <Route path="/biblioteca-productos/neon-led" element={<RecetaNeonLED />} />
         </Route>
       </Routes>
     </BrowserRouter>
