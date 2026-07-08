@@ -5,34 +5,59 @@ import {
   serverTimestamp,
   getCountFromServer,
 } from "firebase/firestore";
-import Swal from "sweetalert2";
-
 import { db } from "../Services/firebase";
+
 import ClienteSelector from "../Components/Clientes/ClienteSelector";
 import ModalAgregarMaterial from "../Components/Proyecto/ModalAgregarMaterial";
 import ListaMaterialesProyecto from "../Components/Proyecto/ListaMaterialesProyecto";
 import ResumenCostos from "../Components/Proyecto/ResumenCostos";
 import EcoButton from "../Components/NeonUI/EcoButton";
+import Swal from "sweetalert2";
 
-function CotizadorNeon() {
+function NuevaCotizacion() {
+  const [cliente, setCliente] = useState(null);
+  const [imagen, setImagen] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [renderSeleccionado, setRenderSeleccionado] = useState(null);
   const [modalMaterial, setModalMaterial] = useState(false);
   const [materiales, setMateriales] = useState([]);
 
-  const [cliente, setCliente] = useState(null);
-
   const [form, setForm] = useState({
     nombreProyecto: "",
-    ancho: 80,
-    alto: 40,
-    margen: 2,
+    tipo: "Neón LED",
+    ancho: "",
+    alto: "",
     manoObra: "",
     utilidad: 60,
   });
 
   const actualizar = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value,
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const seleccionarImagen = (e) => {
+    const archivo = e.target.files[0];
+    if (!archivo) return;
+
+    setImagen(archivo);
+    setPreview(URL.createObjectURL(archivo));
+  };
+
+  const generarRenders = () => {
+    Swal.fire({
+      icon: "info",
+      title: "Render AI preparado",
+      text: "Aquí conectaremos la IA para generar 2 o 3 renders.",
+      confirmButtonColor: "#7C3AED",
+    });
+  };
+
+  const generarSVG = () => {
+    Swal.fire({
+      icon: "info",
+      title: "Vector SVG preparado",
+      text: "Aquí conectaremos la generación del SVG.",
+      confirmButtonColor: "#7C3AED",
     });
   };
 
@@ -52,18 +77,7 @@ function CotizadorNeon() {
   const manoObra = Number(form.manoObra || 0);
   const utilidad = Number(form.utilidad || 0);
   const ganancia = totalMateriales * (utilidad / 100);
-  const costoTotal = totalMateriales;
   const precioVenta = totalMateriales + ganancia + manoObra;
-
-  const anchoUtil = Math.max(
-    Number(form.ancho || 0) - Number(form.margen || 0) * 2,
-    0
-  );
-
-  const altoUtil = Math.max(
-    Number(form.alto || 0) - Number(form.margen || 0) * 2,
-    0
-  );
 
   const guardarCotizacion = async () => {
     if (!cliente?.id) {
@@ -79,8 +93,8 @@ function CotizadorNeon() {
     if (!form.nombreProyecto.trim()) {
       Swal.fire({
         icon: "warning",
-        title: "Falta el nombre del proyecto",
-        text: "Escribe un nombre para identificar esta cotización.",
+        title: "Falta nombre del proyecto",
+        text: "Escribe un nombre para identificar la cotización.",
         confirmButtonColor: "#7C3AED",
       });
       return;
@@ -88,8 +102,7 @@ function CotizadorNeon() {
 
     try {
       const snapshot = await getCountFromServer(collection(db, "cotizaciones"));
-      const totalCotizaciones = snapshot.data().count + 1;
-      const folio = `COT-${String(totalCotizaciones).padStart(4, "0")}`;
+      const folio = `COT-${String(snapshot.data().count + 1).padStart(4, "0")}`;
 
       await addDoc(collection(db, "cotizaciones"), {
         folio,
@@ -99,21 +112,20 @@ function CotizadorNeon() {
         correo: cliente.correo || "",
 
         nombreProyecto: form.nombreProyecto,
-        tipo: "Neón LED",
+        tipo: form.tipo,
         estado: "Cotización",
 
         medidas: {
           ancho: Number(form.ancho || 0),
           alto: Number(form.alto || 0),
-          margen: Number(form.margen || 0),
-          anchoUtil,
-          altoUtil,
         },
+
+        imagenNombre: imagen?.name || "",
+        renderSeleccionado,
 
         materiales,
         totalMateriales,
         manoObra,
-        costoTotal,
         utilidadPorcentaje: utilidad,
         ganancia,
         precioVenta,
@@ -143,11 +155,11 @@ function CotizadorNeon() {
   return (
     <div>
       <h1 className="text-4xl font-bold text-purple-500">
-        🧠 Cotizador Neón LED
+        ✨ Nueva Cotización
       </h1>
 
       <p className="text-zinc-400 mt-2 mb-8">
-        Cotización ligada a cliente, materiales y costos reales.
+        Primero genera el render, después materiales, costos y cotización.
       </p>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -173,8 +185,40 @@ function CotizadorNeon() {
               name="nombreProyecto"
               value={form.nombreProyecto}
               onChange={actualizar}
-              placeholder="Nombre del proyecto. Ej. Letrero Bella Lashes"
+              placeholder="Nombre del proyecto"
             />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <select
+                className="input"
+                name="tipo"
+                value={form.tipo}
+                onChange={actualizar}
+              >
+                <option>Neón LED</option>
+                <option>Letras Corpóreas</option>
+                <option>Caja de Luz</option>
+                <option>Glorificador</option>
+              </select>
+
+              <input
+                className="input"
+                name="ancho"
+                type="number"
+                value={form.ancho}
+                onChange={actualizar}
+                placeholder="Ancho cm"
+              />
+
+              <input
+                className="input"
+                name="alto"
+                type="number"
+                value={form.alto}
+                onChange={actualizar}
+                placeholder="Alto cm"
+              />
+            </div>
           </div>
         </div>
 
@@ -186,54 +230,70 @@ function CotizadorNeon() {
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-2">
           <h2 className="text-xl font-bold text-purple-400 mb-5">
-            📏 Medidas del letrero
+            📷 Imagen del cliente
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <input
-              className="input"
-              name="ancho"
-              type="number"
-              value={form.ancho}
-              onChange={actualizar}
-              placeholder="Ancho cm"
+          {!preview ? (
+            <label className="border-2 border-dashed border-zinc-700 rounded-xl p-10 text-center block cursor-pointer hover:border-purple-500">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={seleccionarImagen}
+                className="hidden"
+              />
+              <div className="text-5xl mb-3">📷</div>
+              <p className="font-bold text-zinc-300">
+                Subir imagen del cliente
+              </p>
+            </label>
+          ) : (
+            <img
+              src={preview}
+              alt="Imagen del cliente"
+              className="w-full max-h-96 object-contain rounded-xl border border-zinc-800 bg-zinc-950"
             />
+          )}
 
-            <input
-              className="input"
-              name="alto"
-              type="number"
-              value={form.alto}
-              onChange={actualizar}
-              placeholder="Alto cm"
-            />
-
-            <input
-              className="input"
-              name="margen"
-              type="number"
-              value={form.margen}
-              onChange={actualizar}
-              placeholder="Margen cm"
-            />
-          </div>
-
-          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mt-5">
-            <p className="text-zinc-400 text-sm">Acrílico final</p>
-            <p className="text-2xl font-bold">
-              {form.ancho} × {form.alto} cm
-            </p>
-
-            <p className="text-zinc-400 text-sm mt-4">Área útil para neón</p>
-            <p className="text-2xl font-bold text-purple-300">
-              {anchoUtil} × {altoUtil} cm
-            </p>
-          </div>
+          <EcoButton type="button" className="w-full mt-5" onClick={generarRenders}>
+            🎨 Generar 2 o 3 renders
+          </EcoButton>
         </div>
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
           <h2 className="text-xl font-bold text-purple-400 mb-5">
-            👨‍🏭 Mano de obra
+            🖼 Renders
+          </h2>
+
+          <div className="space-y-3">
+            {[1, 2, 3].map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setRenderSeleccionado(item)}
+                className={`w-full rounded-xl p-4 border text-left ${
+                  renderSeleccionado === item
+                    ? "border-purple-500 bg-purple-600/20"
+                    : "border-zinc-800 bg-zinc-950"
+                }`}
+              >
+                Render propuesta {item}
+              </button>
+            ))}
+          </div>
+
+          <EcoButton type="button" className="w-full mt-5" onClick={generarSVG}>
+            ✏️ Generar SVG
+          </EcoButton>
+        </div>
+
+        <ListaMaterialesProyecto
+          materiales={materiales}
+          onEliminar={eliminarMaterial}
+        />
+
+        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
+          <h2 className="text-xl font-bold text-purple-400 mb-5">
+            👨‍🏭 Mano de obra y utilidad
           </h2>
 
           <div className="space-y-4">
@@ -243,7 +303,7 @@ function CotizadorNeon() {
               type="number"
               value={form.manoObra}
               onChange={actualizar}
-              placeholder="Mano de obra / fabricación"
+              placeholder="Mano de obra"
             />
 
             <input
@@ -272,11 +332,6 @@ function CotizadorNeon() {
             </EcoButton>
           </div>
         </div>
-
-        <ListaMaterialesProyecto
-          materiales={materiales}
-          onEliminar={eliminarMaterial}
-        />
       </div>
 
       <ModalAgregarMaterial
@@ -288,4 +343,4 @@ function CotizadorNeon() {
   );
 }
 
-export default CotizadorNeon;
+export default NuevaCotizacion;

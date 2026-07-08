@@ -13,6 +13,7 @@ function MainLayout() {
     { path: "/biblioteca-productos", label: "Biblioteca", icon: "📚" },
     { path: "/articulos", label: "Artículos", icon: "📦" },
     { path: "/cotizador-neon", label: "Cotizador Neón", icon: "🧠" },
+    { path: "/nueva-cotizacion", label: "Nueva Cotización", icon: "✨" },
   ];
 
   return (
