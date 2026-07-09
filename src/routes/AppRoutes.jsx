@@ -16,6 +16,8 @@ import RecetaNeonLED from "../Pages/RecetaNeonLED";
 import Articulos from "../Pages/Articulos";
 import CotizadorNeon from "../Pages/CotizadorNeon";
 import NuevaCotizacion from "../Pages/NuevaCotizacion";
+import DetalleCliente from "../Pages/DetalleCliente";
+import DetalleCotizacion from "../Pages/DetalleCotizacion";
 
 function AppRoutes() {
   return (
@@ -35,6 +37,8 @@ function AppRoutes() {
           <Route path="/articulos" element={<Articulos />} />
           <Route path="/cotizador-neon" element={<CotizadorNeon />} />
           <Route path="/nueva-cotizacion" element={<NuevaCotizacion />} />
+          <Route path="/clientes/:id" element={<DetalleCliente />} />
+          <Route path="/cotizaciones/:id" element={<DetalleCotizacion />} />
         </Route>
       </Routes>
     </BrowserRouter>

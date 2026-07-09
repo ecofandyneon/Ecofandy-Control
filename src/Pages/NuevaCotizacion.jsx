@@ -23,12 +23,13 @@ function NuevaCotizacion() {
   const [materiales, setMateriales] = useState([]);
 
   const [form, setForm] = useState({
-    nombreProyecto: "",
-    tipo: "Neón LED",
-    ancho: "",
-    alto: "",
-    manoObra: "",
-    utilidad: 60,
+  nombreProyecto: "",
+  tipo: "Neón LED",
+  ancho: "",
+  alto: "",
+  manoObra: "",
+  utilidad: 60,
+  descuento: 0,
   });
 
   const actualizar = (e) => {
@@ -76,8 +77,12 @@ function NuevaCotizacion() {
 
   const manoObra = Number(form.manoObra || 0);
   const utilidad = Number(form.utilidad || 0);
+  const descuento = Number(form.descuento || 0);
+
   const ganancia = totalMateriales * (utilidad / 100);
+
   const precioVenta = totalMateriales + ganancia + manoObra;
+  const precioFinal = Math.max(precioVenta - descuento, 0);
 
   const guardarCotizacion = async () => {
     if (!cliente?.id) {
@@ -129,6 +134,10 @@ function NuevaCotizacion() {
         utilidadPorcentaje: utilidad,
         ganancia,
         precioVenta,
+        descuento,
+        ganancia,
+        precioVenta,
+        precioFinal,
 
         creadoEn: serverTimestamp(),
         actualizadoEn: serverTimestamp(),
@@ -226,6 +235,7 @@ function NuevaCotizacion() {
           materiales={materiales}
           manoObra={manoObra}
           utilidad={utilidad}
+          descuento={descuento}
         />
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-2">
@@ -313,6 +323,15 @@ function NuevaCotizacion() {
               value={form.utilidad}
               onChange={actualizar}
               placeholder="Utilidad %"
+              />
+
+            <input
+              className="input"
+              name="descuento"
+              type="number"
+              value={form.descuento}
+              onChange={actualizar}
+              placeholder="Descuento"
             />
 
             <EcoButton

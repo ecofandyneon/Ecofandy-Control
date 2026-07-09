@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   collection,
   addDoc,
@@ -173,62 +174,13 @@ function Clientes() {
             </h2>
 
             <div className="space-y-4">
-              <EcoInput
-                label="Nombre del cliente"
-                name="nombre"
-                value={form.nombre}
-                onChange={actualizarCampo}
-                placeholder="Nombre del cliente"
-              />
-
-              <EcoInput
-                label="WhatsApp"
-                name="whatsapp"
-                value={form.whatsapp}
-                onChange={actualizarCampo}
-                placeholder="7771234567"
-              />
-
-              <EcoInput
-                label="Correo"
-                name="correo"
-                type="email"
-                value={form.correo}
-                onChange={actualizarCampo}
-                placeholder="cliente@correo.com"
-              />
-
-              <EcoInput
-                label="Ciudad"
-                name="ciudad"
-                value={form.ciudad}
-                onChange={actualizarCampo}
-                placeholder="Cuernavaca"
-              />
-
-              <EcoInput
-                label="Código Postal"
-                name="cp"
-                value={form.cp}
-                onChange={actualizarCampo}
-                placeholder="62000"
-              />
-
-              <EcoInput
-                label="RFC"
-                name="rfc"
-                value={form.rfc}
-                onChange={actualizarCampo}
-                placeholder="XAXX010101000"
-              />
-
-              <EcoInput
-                label="Uso de CFDI"
-                name="usoCfdi"
-                value={form.usoCfdi}
-                onChange={actualizarCampo}
-                placeholder="G03, P01, S01..."
-              />
+              <EcoInput label="Nombre del cliente" name="nombre" value={form.nombre} onChange={actualizarCampo} placeholder="Nombre del cliente" />
+              <EcoInput label="WhatsApp" name="whatsapp" value={form.whatsapp} onChange={actualizarCampo} placeholder="7771234567" />
+              <EcoInput label="Correo" name="correo" type="email" value={form.correo} onChange={actualizarCampo} placeholder="cliente@correo.com" />
+              <EcoInput label="Ciudad" name="ciudad" value={form.ciudad} onChange={actualizarCampo} placeholder="Cuernavaca" />
+              <EcoInput label="Código Postal" name="cp" value={form.cp} onChange={actualizarCampo} placeholder="62000" />
+              <EcoInput label="RFC" name="rfc" value={form.rfc} onChange={actualizarCampo} placeholder="XAXX010101000" />
+              <EcoInput label="Uso de CFDI" name="usoCfdi" value={form.usoCfdi} onChange={actualizarCampo} placeholder="G03, P01, S01..." />
 
               <textarea
                 className="input min-h-28"
@@ -243,12 +195,7 @@ function Clientes() {
               </EcoButton>
 
               {editandoId && (
-                <EcoButton
-                  type="button"
-                  variant="secondary"
-                  className="w-full"
-                  onClick={limpiarFormulario}
-                >
+                <EcoButton type="button" variant="secondary" className="w-full" onClick={limpiarFormulario}>
                   Cancelar edición
                 </EcoButton>
               )}
@@ -277,29 +224,36 @@ function Clientes() {
 
             <tbody>
               {clientes.map((cliente) => (
-                <tr
-                  key={cliente.id}
-                  className="border-t border-zinc-800 hover:bg-zinc-800"
-                >
+                <tr key={cliente.id} className="border-t border-zinc-800 hover:bg-zinc-800">
                   <td className="p-4 font-bold">{cliente.nombre}</td>
                   <td className="p-4">{cliente.whatsapp || "Sin WhatsApp"}</td>
                   <td className="p-4">{cliente.correo || "Sin correo"}</td>
                   <td className="p-4">{cliente.rfc || "Sin RFC"}</td>
                   <td className="p-4">{cliente.cp || "Sin CP"}</td>
-                  <td className="p-4 flex gap-2">
-                    <button
-                      onClick={() => editarCliente(cliente)}
-                      className="text-purple-400 hover:text-purple-300 font-bold"
-                    >
-                      Editar
-                    </button>
 
-                    <button
-                      onClick={() => eliminarCliente(cliente.id)}
-                      className="text-red-400 hover:text-red-300 font-bold"
-                    >
-                      Eliminar
-                    </button>
+                  <td className="p-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        to={`/clientes/${cliente.id}`}
+                        className="text-green-400 hover:text-green-300 font-bold"
+                      >
+                        Historial
+                      </Link>
+
+                      <button
+                        onClick={() => editarCliente(cliente)}
+                        className="text-purple-400 hover:text-purple-300 font-bold"
+                      >
+                        Editar
+                      </button>
+
+                      <button
+                        onClick={() => eliminarCliente(cliente.id)}
+                        className="text-red-400 hover:text-red-300 font-bold"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
