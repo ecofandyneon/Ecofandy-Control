@@ -25,6 +25,14 @@ function DetalleCotizacion() {
   const [cargando, setCargando] = useState(true);
   const [notasCotizacion, setNotasCotizacion] = useState("");
   const [guardandoNotas, setGuardandoNotas] = useState(false);
+  const [mostrarPago, setMostrarPago] = useState(false);
+  const [guardandoPago, setGuardandoPago] = useState(false);
+  const [nuevoPago, setNuevoPago] = useState({
+    monto: "",
+    metodo: "Transferencia",
+    referencia: "",
+    nota: "",
+  });
 
   const imagenCliente =
     archivos.find(
@@ -216,8 +224,8 @@ function DetalleCotizacion() {
         }
       };
 
-      // ENCABEZADO
-      pdf.setFillColor(24, 24, 27);
+      // ENCABEZADO LIMPIO
+      pdf.setFillColor(255, 255, 255);
       pdf.rect(0, 0, 210, 36, "F");
 
       try {
@@ -238,14 +246,14 @@ function DetalleCotizacion() {
         console.warn("No se pudo agregar el logo:", error);
       }
 
-      pdf.setTextColor(168, 85, 247);
+      pdf.setTextColor(126, 34, 206);
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(18);
       pdf.text("COTIZACIÓN", 195, 15, {
         align: "right",
       });
 
-      pdf.setTextColor(212, 212, 216);
+      pdf.setTextColor(82, 82, 91);
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
       pdf.text(cotizacion.folio || "", 195, 23, {
@@ -257,6 +265,10 @@ function DetalleCotizacion() {
         29,
         { align: "right" }
       );
+
+      pdf.setDrawColor(126, 34, 206);
+      pdf.setLineWidth(0.8);
+      pdf.line(15, 36, 195, 36);
 
       // CLIENTE Y PROYECTO EN DOS COLUMNAS
       pdf.setTextColor(39, 39, 42);
@@ -378,22 +390,23 @@ function DetalleCotizacion() {
 
       // NOTAS DE COTIZACIÓN
       if (notasCotizacion.trim()) {
-        const yNotas = descuento > 0 ? 248 : 238;
+        const yNotas = descuento > 0 ? 246 : 236;
         const lineasNotas = pdf
-          .splitTextToSize(notasCotizacion.trim(), 166)
-          .slice(0, 5);
+          .splitTextToSize(notasCotizacion.trim(), 182)
+          .slice(0, 8);
 
         pdf.setFillColor(250, 250, 250);
-        pdf.roundedRect(15, yNotas, 180, 28, 3, 3, "F");
+        pdf.setDrawColor(228, 228, 231);
+        pdf.roundedRect(8, yNotas, 194, 34, 3, 3, "FD");
 
         pdf.setTextColor(63, 63, 70);
         pdf.setFont("helvetica", "bold");
         pdf.setFontSize(9);
-        pdf.text("NOTAS", 22, yNotas + 7);
+        pdf.text("NOTAS", 14, yNotas + 7);
 
         pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(8);
-        pdf.text(lineasNotas, 22, yNotas + 13);
+        pdf.setFontSize(7.5);
+        pdf.text(lineasNotas, 14, yNotas + 13);
       }
 
       // PIE DE PÁGINA
@@ -437,18 +450,12 @@ function DetalleCotizacion() {
     const mensaje = [
       `Hola ${nombreCliente || ""} 👋`,
       "",
-      "Soy Fabián de Ecofandy Neon.",
-      `Te comparto la cotización de tu proyecto *${
-        cotizacion.nombreProyecto || ""
-      }*.`,
+      `Te envío la cotización solicitada de tu proyecto *${cotizacion.nombreProyecto || ""}*.`,
+      `📄 Número de cotización: *${cotizacion.folio || ""}*`,
       "",
-      `📏 Medidas: ${cotizacion.medidas?.ancho || 0} x ${
-        cotizacion.medidas?.alto || 0
-      } cm`,
-      `💰 Precio final: *$${moneda(precioFinal)} MXN*`,
-      `📄 Folio: ${cotizacion.folio || ""}`,
+      "Incluye diseño muestra. Quedo en espera de tus comentarios.",
       "",
-      "Enseguida te comparto el PDF de la cotización. 😊",
+      "Muchas gracias. 😊",
     ].join("\n");
 
     window.open(
@@ -529,6 +536,73 @@ function DetalleCotizacion() {
       alert("No se pudieron guardar las notas.");
     } finally {
       setGuardandoNotas(false);
+    }
+  };
+
+  const precioTotal = Number(
+    cotizacion?.precioFinal || cotizacion?.precioVenta || 0
+  );
+
+  const pagos = cotizacion?.pagos || [];
+
+  const totalPagado = pagos.reduce(
+    (total, pago) => total + Number(pago.monto || 0),
+    0
+  );
+
+  const saldoPendiente = Math.max(precioTotal - totalPagado, 0);
+
+  const registrarPago = async () => {
+    const monto = Number(nuevoPago.monto);
+
+    if (!monto || monto <= 0) {
+      alert("Escribe un monto válido.");
+      return;
+    }
+
+    if (monto > saldoPendiente) {
+      alert(`El pago no puede ser mayor al saldo pendiente de $${moneda(saldoPendiente)} MXN.`);
+      return;
+    }
+
+    try {
+      setGuardandoPago(true);
+
+      const pago = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        monto,
+        metodo: nuevoPago.metodo,
+        referencia: nuevoPago.referencia.trim(),
+        nota: nuevoPago.nota.trim(),
+        fecha: new Date().toISOString(),
+      };
+
+      const cotizacionRef = doc(db, "cotizaciones", id);
+
+      await updateDoc(cotizacionRef, {
+        pagos: arrayUnion(pago),
+        actualizadoEn: serverTimestamp(),
+      });
+
+      setCotizacion((actual) => ({
+        ...actual,
+        pagos: [...(actual.pagos || []), pago],
+      }));
+
+      setNuevoPago({
+        monto: "",
+        metodo: "Transferencia",
+        referencia: "",
+        nota: "",
+      });
+
+      setMostrarPago(false);
+      alert("Pago registrado correctamente.");
+    } catch (error) {
+      console.error("Error registrando pago:", error);
+      alert("No se pudo registrar el pago.");
+    } finally {
+      setGuardandoPago(false);
     }
   };
 
@@ -737,6 +811,142 @@ function DetalleCotizacion() {
               </strong>
             </div>
           </div>
+        </div>
+
+        <div className="xl:col-span-3 bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-purple-400">
+                💳 Pagos y anticipos
+              </h2>
+              <p className="text-zinc-500 mt-2">
+                Registra anticipos, abonos y liquidaciones del proyecto.
+              </p>
+            </div>
+
+            {saldoPendiente > 0 && (
+              <button
+                type="button"
+                onClick={() => setMostrarPago((actual) => !actual)}
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-3 rounded-xl transition"
+              >
+                {mostrarPago ? "✕ Cancelar" : "➕ Registrar pago"}
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5">
+              <p className="text-zinc-500">Precio total</p>
+              <p className="text-2xl font-bold text-white mt-2">${moneda(precioTotal)}</p>
+            </div>
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5">
+              <p className="text-zinc-500">Total pagado</p>
+              <p className="text-2xl font-bold text-green-400 mt-2">${moneda(totalPagado)}</p>
+            </div>
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5">
+              <p className="text-zinc-500">Saldo pendiente</p>
+              <p className={`text-2xl font-bold mt-2 ${saldoPendiente > 0 ? "text-yellow-400" : "text-green-400"}`}>
+                ${moneda(saldoPendiente)}
+              </p>
+            </div>
+          </div>
+
+          {mostrarPago && (
+            <div className="mt-6 bg-zinc-950 border border-purple-700/40 rounded-xl p-5">
+              <h3 className="font-bold text-white text-lg mb-5">Registrar nuevo pago</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-zinc-400 text-sm mb-2">Monto</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={nuevoPago.monto}
+                    onChange={(evento) => setNuevoPago({ ...nuevoPago, monto: evento.target.value })}
+                    placeholder="0.00"
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-purple-500 outline-none rounded-xl p-3 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-zinc-400 text-sm mb-2">Método de pago</label>
+                  <select
+                    value={nuevoPago.metodo}
+                    onChange={(evento) => setNuevoPago({ ...nuevoPago, metodo: evento.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-purple-500 outline-none rounded-xl p-3 text-white"
+                  >
+                    <option>Transferencia</option>
+                    <option>Efectivo</option>
+                    <option>Tarjeta</option>
+                    <option>Mercado Pago</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-zinc-400 text-sm mb-2">Referencia</label>
+                  <input
+                    type="text"
+                    value={nuevoPago.referencia}
+                    onChange={(evento) => setNuevoPago({ ...nuevoPago, referencia: evento.target.value })}
+                    placeholder="Opcional"
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-purple-500 outline-none rounded-xl p-3 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-zinc-400 text-sm mb-2">Nota</label>
+                  <input
+                    type="text"
+                    value={nuevoPago.nota}
+                    onChange={(evento) => setNuevoPago({ ...nuevoPago, nota: evento.target.value })}
+                    placeholder="Ejemplo: Anticipo del proyecto"
+                    className="w-full bg-zinc-900 border border-zinc-800 focus:border-purple-500 outline-none rounded-xl p-3 text-white"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={registrarPago}
+                disabled={guardandoPago}
+                className="mt-5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-5 py-3 rounded-xl transition"
+              >
+                {guardandoPago ? "Guardando..." : "💾 Guardar pago"}
+              </button>
+            </div>
+          )}
+
+          {pagos.length > 0 && (
+            <div className="mt-6">
+              <h3 className="font-bold text-white mb-4">Historial de pagos</h3>
+              <div className="space-y-3">
+                {[...pagos].reverse().map((pago) => (
+                  <div
+                    key={pago.id}
+                    className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                  >
+                    <div>
+                      <p className="font-bold text-white">{pago.metodo}</p>
+                      <p className="text-zinc-500 text-sm">
+                        {new Date(pago.fecha).toLocaleDateString("es-MX")}
+                        {pago.referencia ? ` · Ref: ${pago.referencia}` : ""}
+                      </p>
+                      {pago.nota && <p className="text-zinc-400 text-sm mt-1">{pago.nota}</p>}
+                    </div>
+                    <p className="text-green-400 text-xl font-bold">+${moneda(pago.monto)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {saldoPendiente === 0 && precioTotal > 0 && (
+            <div className="mt-6 bg-green-950/40 border border-green-700/40 rounded-xl p-4 text-green-300 font-bold text-center">
+              ✅ Proyecto liquidado
+            </div>
+          )}
         </div>
 
         <div className="xl:col-span-3 bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
