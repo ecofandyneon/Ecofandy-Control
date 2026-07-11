@@ -141,13 +141,13 @@ function DetalleCliente() {
             to="/nueva-cotizacion"
             className="block text-center mt-6 bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl"
           >
-            ➕ Nueva cotización
+            ➕ Nuevo proyecto
           </Link>
         </div>
 
         <div className="xl:col-span-2 bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
           <h2 className="text-xl font-bold text-purple-400 mb-5">
-            📋 Historial de cotizaciones
+            📋 Historial de proyectos
           </h2>
 
           <div className="space-y-4">
@@ -222,12 +222,21 @@ function DetalleCliente() {
                       ).toLocaleString("es-MX")}
                     </p>
 
-                    <Link
-                      to={`/cotizaciones/${cotizacion.id}`}
-                      className="inline-block mt-5 bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-3 rounded-xl"
-                    >
-                      📂 Abrir expediente
-                    </Link>
+                    <div className="flex flex-col gap-3 mt-5">
+                      <Link
+                        to={`/cotizaciones/${cotizacion.id}`}
+                        className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-3 rounded-xl text-center"
+                      >
+                        📂 Abrir expediente
+                      </Link>
+
+                      <Link
+                        to={`/nueva-cotizacion?editar=${cotizacion.id}`}
+                        className="inline-block bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-5 py-3 rounded-xl text-center border border-zinc-700"
+                      >
+                        ✏️ Editar proyecto
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -235,7 +244,7 @@ function DetalleCliente() {
 
             {cotizaciones.length === 0 && (
               <p className="text-zinc-500 text-center py-8">
-                Este cliente aún no tiene cotizaciones.
+                Este cliente aún no tiene proyectos.
               </p>
             )}
           </div>

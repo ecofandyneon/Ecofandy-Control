@@ -5,15 +5,13 @@ function MainLayout() {
   const menuItems = [
     { path: "/", label: "Dashboard", icon: "🏠" },
     { path: "/proyectos", label: "Proyectos", icon: "📂" },
-    { path: "/proyectos/nuevo", label: "Nuevo Proyecto", icon: "➕" },
+    { path: "/nueva-cotizacion", label: "Nuevo Proyecto", icon: "➕" },
     { path: "/clientes", label: "Clientes", icon: "👥" },
     { path: "/produccion", label: "Producción", icon: "🏭" },
-    { path: "/configuracion", label: "Configuración", icon: "⚙️" },
-    { path: "/render-ai", label: "Render AI", icon: "🎨" },
     { path: "/biblioteca-productos", label: "Biblioteca", icon: "📚" },
     { path: "/articulos", label: "Artículos", icon: "📦" },
-    { path: "/cotizador-neon", label: "Cotizador Neón", icon: "🧠" },
-    { path: "/nueva-cotizacion", label: "Nueva Cotización", icon: "✨" },
+    { path: "/render-ai", label: "Render AI", icon: "🎨" },
+    { path: "/configuracion", label: "Configuración", icon: "⚙️" },
   ];
 
   return (
@@ -25,11 +23,9 @@ function MainLayout() {
             alt="Ecofandy Neón"
             className="w-36 mx-auto mb-4 drop-shadow-[0_0_18px_rgba(168,85,247,0.9)]"
           />
-
           <h1 className="text-xl font-bold text-purple-400">
             Ecofandy Control
           </h1>
-
           <p className="text-xs tracking-[0.25em] text-zinc-400 mt-2">
             ILUMINAMOS TUS IDEAS
           </p>

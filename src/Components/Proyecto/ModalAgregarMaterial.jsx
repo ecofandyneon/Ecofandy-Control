@@ -13,10 +13,10 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
   const [articulos, setArticulos] = useState([]);
   const [busqueda, setBusqueda] = useState("");
   const [seleccionado, setSeleccionado] = useState(null);
-
   const [cantidad, setCantidad] = useState("");
   const [ancho, setAncho] = useState("");
   const [alto, setAlto] = useState("");
+  const [costoManual, setCostoManual] = useState("");
 
   useEffect(() => {
     const cargarArticulos = async () => {
@@ -24,9 +24,9 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
       const snapshot = await getDocs(q);
 
       setArticulos(
-        snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
+        snapshot.docs.map((documento) => ({
+          id: documento.id,
+          ...documento.data(),
         }))
       );
     };
@@ -42,6 +42,7 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
     setCantidad("");
     setAncho("");
     setAlto("");
+    setCostoManual("");
   };
 
   const cerrar = () => {
@@ -49,11 +50,28 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
     onClose();
   };
 
+  const categoriaNormalizada = String(
+    seleccionado?.categoria || ""
+  ).toLowerCase();
+
+  const unidadNormalizada = String(
+    seleccionado?.unidad || ""
+  ).toLowerCase();
+
+  const esConsumible =
+    categoriaNormalizada.includes("consumible") ||
+    unidadNormalizada === "consumible";
+
   const esAcrilico =
-    seleccionado?.categoria === "Acrílicos" || seleccionado?.unidad === "Hoja";
+    !esConsumible &&
+    (seleccionado?.categoria === "Acrílicos" ||
+      seleccionado?.unidad === "Hoja");
 
   const articulosFiltrados = articulos.filter((articulo) => {
-    const texto = `${articulo.nombre} ${articulo.categoria} ${articulo.proveedor}`.toLowerCase();
+    const texto = `${articulo.nombre || ""} ${articulo.categoria || ""} ${
+      articulo.proveedor || ""
+    }`.toLowerCase();
+
     return texto.includes(busqueda.toLowerCase());
   });
 
@@ -62,8 +80,19 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
 
     let total = 0;
     let descripcionCantidad = "";
+    let precioUnitario = Number(seleccionado.precio || 0);
+    let cantidadGuardada = 0;
 
-    if (esAcrilico) {
+    if (esConsumible) {
+      total = Number(costoManual || 0);
+      if (total <= 0) return;
+
+      precioUnitario = total;
+      cantidadGuardada = 1;
+      descripcionCantidad = "Costo manual usado en este proyecto";
+    } else if (esAcrilico) {
+      if (Number(ancho || 0) <= 0 || Number(alto || 0) <= 0) return;
+
       const calculo = calcularAcrilico({
         costoHoja: seleccionado.precio,
         anchoHoja: seleccionado.anchoHoja || 122,
@@ -74,10 +103,16 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
       });
 
       total = calculo.costoConCorte;
+      cantidadGuardada = 1;
       descripcionCantidad = `${ancho} x ${alto} cm`;
     } else {
-      total = Number(seleccionado.precio || 0) * Number(cantidad || 0);
-      descripcionCantidad = `${cantidad} ${seleccionado.unidad || ""}`;
+      cantidadGuardada = Number(cantidad || 0);
+      if (cantidadGuardada <= 0) return;
+
+      total = precioUnitario * cantidadGuardada;
+      descripcionCantidad = `${cantidadGuardada} ${
+        seleccionado.unidad || ""
+      }`;
     }
 
     onAgregar({
@@ -85,10 +120,11 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
       nombre: seleccionado.nombre,
       categoria: seleccionado.categoria,
       unidad: seleccionado.unidad,
-      precioUnitario: Number(seleccionado.precio || 0),
-      cantidad: esAcrilico ? 1 : Number(cantidad || 0),
+      precioUnitario,
+      cantidad: cantidadGuardada,
       ancho: esAcrilico ? Number(ancho || 0) : null,
       alto: esAcrilico ? Number(alto || 0) : null,
+      costoManual: esConsumible ? total : null,
       descripcionCantidad,
       total,
     });
@@ -105,6 +141,7 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
           </h2>
 
           <button
+            type="button"
             onClick={cerrar}
             className="text-zinc-400 hover:text-white text-2xl"
           >
@@ -131,8 +168,11 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
                   className="w-full text-left bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl p-4"
                 >
                   <p className="font-bold text-white">{articulo.nombre}</p>
+
                   <p className="text-sm text-zinc-400">
-                    {articulo.categoria} · ${Number(articulo.precio || 0).toLocaleString("es-MX")} / {articulo.unidad}
+                    {articulo.categoria} · $
+                    {Number(articulo.precio || 0).toLocaleString("es-MX")} /{" "}
+                    {articulo.unidad}
                   </p>
                 </button>
               ))}
@@ -152,15 +192,40 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
                 {seleccionado.nombre}
               </p>
               <p className="text-green-400 font-bold">
-                ${Number(seleccionado.precio || 0).toLocaleString("es-MX")} / {seleccionado.unidad}
+                $
+                {Number(seleccionado.precio || 0).toLocaleString("es-MX")} /{" "}
+                {seleccionado.unidad}
               </p>
             </div>
 
-            {esAcrilico ? (
+            {esConsumible ? (
+              <div>
+                <label className="block text-zinc-400 text-sm mb-2">
+                  Costo usado en este proyecto
+                </label>
+
+                <input
+                  className="input w-full"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={costoManual}
+                  onChange={(e) => setCostoManual(e.target.value)}
+                  placeholder="Ej. 85"
+                />
+
+                <p className="text-zinc-500 text-sm mt-3">
+                  Este importe solo se guardará en este proyecto. No cambia el
+                  precio del artículo en la biblioteca.
+                </p>
+              </div>
+            ) : esAcrilico ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
                   className="input"
                   type="number"
+                  min="0"
+                  step="0.1"
                   value={ancho}
                   onChange={(e) => setAncho(e.target.value)}
                   placeholder="Ancho de pieza cm"
@@ -169,6 +234,8 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
                 <input
                   className="input"
                   type="number"
+                  min="0"
+                  step="0.1"
                   value={alto}
                   onChange={(e) => setAlto(e.target.value)}
                   placeholder="Alto de pieza cm"
@@ -178,9 +245,11 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
               <input
                 className="input w-full"
                 type="number"
+                min="0"
+                step="0.01"
                 value={cantidad}
                 onChange={(e) => setCantidad(e.target.value)}
-                placeholder={`Cantidad en ${seleccionado.unidad}`}
+                placeholder={`Cantidad en ${seleccionado.unidad || "unidad"}`}
               />
             )}
 
@@ -188,7 +257,13 @@ function ModalAgregarMaterial({ abierto, onClose, onAgregar }) {
               <EcoButton
                 type="button"
                 variant="secondary"
-                onClick={() => setSeleccionado(null)}
+                onClick={() => {
+                  setSeleccionado(null);
+                  setCantidad("");
+                  setAncho("");
+                  setAlto("");
+                  setCostoManual("");
+                }}
               >
                 Regresar
               </EcoButton>
