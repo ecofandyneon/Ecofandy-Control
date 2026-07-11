@@ -190,6 +190,10 @@ function NuevaCotizacion() {
   const [guardando, setGuardando] = useState(false);
   const [cargandoProyecto, setCargandoProyecto] = useState(modoEdicion);
   const [proyectoOriginal, setProyectoOriginal] = useState(null);
+  const [borradorListo, setBorradorListo] = useState(modoEdicion);
+  const [borradorGuardadoEn, setBorradorGuardadoEn] = useState(null);
+
+  const BORRADOR_KEY = "ecofandy-nuevo-proyecto-borrador";
 
   const [secciones, setSecciones] = useState({
     cliente: true,
@@ -208,6 +212,126 @@ function NuevaCotizacion() {
     utilidad: 60,
     descuento: 0,
   });
+
+  useEffect(() => {
+    if (modoEdicion) {
+      setBorradorListo(true);
+      return;
+    }
+
+    try {
+      const guardado = localStorage.getItem(BORRADOR_KEY);
+
+      if (guardado) {
+        const borrador = JSON.parse(guardado);
+
+        setCliente(borrador.cliente || null);
+        setForm((actual) => ({
+          ...actual,
+          ...(borrador.form || {}),
+        }));
+        setMateriales(
+          Array.isArray(borrador.materiales) ? borrador.materiales : []
+        );
+        setSecciones((actuales) => ({
+          ...actuales,
+          ...(borrador.secciones || {}),
+        }));
+        setBorradorGuardadoEn(borrador.guardadoEn || null);
+      }
+    } catch (error) {
+      console.error("No se pudo recuperar el borrador:", error);
+    } finally {
+      setBorradorListo(true);
+    }
+  }, [modoEdicion]);
+
+  useEffect(() => {
+    if (modoEdicion || !borradorListo) return;
+
+    const tieneContenido =
+      Boolean(cliente?.id) ||
+      Boolean(form.nombreProyecto.trim()) ||
+      Boolean(form.ancho) ||
+      Boolean(form.alto) ||
+      materiales.length > 0 ||
+      Boolean(form.manoObra);
+
+    if (!tieneContenido) return;
+
+    const temporizador = setTimeout(() => {
+      try {
+        const guardadoEn = new Date().toISOString();
+
+        localStorage.setItem(
+          BORRADOR_KEY,
+          JSON.stringify({
+            cliente,
+            form,
+            materiales,
+            secciones,
+            guardadoEn,
+          })
+        );
+
+        setBorradorGuardadoEn(guardadoEn);
+      } catch (error) {
+        console.error("No se pudo guardar el borrador:", error);
+      }
+    }, 400);
+
+    return () => clearTimeout(temporizador);
+  }, [
+    modoEdicion,
+    borradorListo,
+    cliente,
+    form,
+    materiales,
+    secciones,
+  ]);
+
+  const descartarBorrador = async () => {
+    const resultado = await Swal.fire({
+      icon: "warning",
+      title: "¿Descartar borrador?",
+      text: "Se borrarán los datos temporales de este nuevo proyecto.",
+      showCancelButton: true,
+      confirmButtonText: "Sí, descartar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#DC2626",
+      cancelButtonColor: "#52525B",
+    });
+
+    if (!resultado.isConfirmed) return;
+
+    localStorage.removeItem(BORRADOR_KEY);
+
+    setCliente(null);
+    setImagenCliente(null);
+    setRenders([]);
+    setRenderAprobado(null);
+    setImagenCorel(null);
+    setSvgFinal(null);
+    setMateriales([]);
+    setBorradorGuardadoEn(null);
+    setForm({
+      nombreProyecto: "",
+      tipo: "Neón LED",
+      ancho: "",
+      alto: "",
+      margen: 2,
+      manoObra: "",
+      utilidad: 60,
+      descuento: 0,
+    });
+
+    await Swal.fire({
+      icon: "success",
+      title: "Borrador descartado",
+      timer: 1200,
+      showConfirmButton: false,
+    });
+  };
 
   useEffect(() => {
     const cargarProyecto = async () => {
@@ -540,6 +664,11 @@ function NuevaCotizacion() {
         });
       }
 
+      if (!modoEdicion) {
+        localStorage.removeItem(BORRADOR_KEY);
+        setBorradorGuardadoEn(null);
+      }
+
       await Swal.fire({
         icon: "success",
         title: modoEdicion ? "Cambios guardados" : "Proyecto guardado",
@@ -587,6 +716,37 @@ function NuevaCotizacion() {
           Cliente, archivos, materiales, costos y expediente en un solo lugar.
         </p>
       </div>
+
+      {!modoEdicion && (
+        <div className="mb-6 bg-zinc-900 border border-purple-700/40 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <p className="text-purple-300 font-bold">
+              💾 Borrador automático activo
+            </p>
+            <p className="text-zinc-500 text-sm mt-1">
+              {borradorGuardadoEn
+                ? `Guardado temporalmente a las ${new Date(
+                    borradorGuardadoEn
+                  ).toLocaleTimeString("es-MX", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}`
+                : "Tus datos se guardarán automáticamente mientras trabajas."}
+            </p>
+            <p className="text-zinc-600 text-xs mt-1">
+              Los archivos seleccionados todavía no se conservan al salir de esta pantalla.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={descartarBorrador}
+            className="bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white font-bold px-4 py-2 rounded-xl transition"
+          >
+            🗑️ Descartar borrador
+          </button>
+        </div>
+      )}
 
       <div className="space-y-6">
         <SeccionPlegable
