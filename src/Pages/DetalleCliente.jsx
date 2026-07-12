@@ -73,7 +73,42 @@ function DetalleCliente() {
             index === array.findIndex((item) => item.id === cotizacion.id)
         );
 
-        setCotizaciones(sinDuplicados);
+        const cotizacionesConProyecto = await Promise.all(
+          sinDuplicados.map(async (cotizacion) => {
+            try {
+              const qProyecto = query(
+                collection(db, "proyectos"),
+                where("cotizacionId", "==", cotizacion.id)
+              );
+
+              const snapshotProyecto = await getDocs(qProyecto);
+
+              const proyectoRelacionado = snapshotProyecto.empty
+                ? null
+                : {
+                    id: snapshotProyecto.docs[0].id,
+                    ...snapshotProyecto.docs[0].data(),
+                  };
+
+              return {
+                ...cotizacion,
+                proyectoRelacionado,
+              };
+            } catch (error) {
+              console.error(
+                "Error cargando proyecto relacionado:",
+                error
+              );
+
+              return {
+                ...cotizacion,
+                proyectoRelacionado: null,
+              };
+            }
+          })
+        );
+
+        setCotizaciones(cotizacionesConProyecto);
       } catch (error) {
         console.error("Error cargando historial del cliente:", error);
       } finally {
@@ -151,96 +186,103 @@ function DetalleCliente() {
           </h2>
 
           <div className="space-y-4">
-            {cotizaciones.map((cotizacion) => (
-              <div
-                key={cotizacion.id}
-                className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-lg hover:border-purple-500 transition-all duration-300"
-              >
-                <div className="flex flex-col md:flex-row md:justify-between gap-6">
-                  <div className="flex-1">
-                    <p className="font-bold text-white text-lg">
-                      {cotizacion.folio} · {cotizacion.nombreProyecto}
-                    </p>
+            {cotizaciones.map((cotizacion) => {
+              const estadoActual =
+                cotizacion.proyectoRelacionado?.estado ||
+                cotizacion.estado ||
+                "";
 
-                    <div className="flex items-center gap-3 mt-2">
-                      <p className="text-zinc-400 text-sm">
-                        {cotizacion.tipo}
+              return (
+                <div
+                  key={cotizacion.id}
+                  className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 shadow-lg hover:border-purple-500 transition-all duration-300"
+                >
+                  <div className="flex flex-col md:flex-row md:justify-between gap-6">
+                    <div className="flex-1">
+                      <p className="font-bold text-white text-lg">
+                        {cotizacion.folio} · {cotizacion.nombreProyecto}
                       </p>
 
-                      <EstadoBadge estado={cotizacion.estado} />
+                      <div className="flex items-center gap-3 mt-2">
+                        <p className="text-zinc-400 text-sm">
+                          {cotizacion.tipo}
+                        </p>
+
+                        <EstadoBadge estado={estadoActual} />
+                      </div>
+
+                      <p className="text-zinc-500 text-sm mt-2">
+                        {cotizacion.medidas?.ancho || 0} ×{" "}
+                        {cotizacion.medidas?.alto || 0} cm
+                      </p>
+
+                      <BarraProgreso estado={estadoActual} />
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5 text-sm">
+                        <div className="bg-zinc-900 rounded-xl p-3">
+                          <p className="text-zinc-500">Materiales</p>
+                          <p className="font-bold text-white">
+                            $
+                            {Number(
+                              cotizacion.totalMateriales || 0
+                            ).toLocaleString("es-MX")}
+                          </p>
+                        </div>
+
+                        <div className="bg-zinc-900 rounded-xl p-3">
+                          <p className="text-zinc-500">Mano de obra</p>
+                          <p className="font-bold text-white">
+                            $
+                            {Number(cotizacion.manoObra || 0).toLocaleString(
+                              "es-MX"
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="bg-zinc-900 rounded-xl p-3">
+                          <p className="text-zinc-500">Descuento</p>
+                          <p className="font-bold text-red-400">
+                            -$
+                            {Number(cotizacion.descuento || 0).toLocaleString(
+                              "es-MX"
+                            )}
+                          </p>
+                        </div>
+                      </div>
                     </div>
 
-                    <p className="text-zinc-500 text-sm mt-2">
-                      {cotizacion.medidas?.ancho || 0} ×{" "}
-                      {cotizacion.medidas?.alto || 0} cm
-                    </p>
+                    <div className="md:text-right min-w-44">
+                      <p className="text-zinc-500 text-sm">Precio final</p>
 
-                    <BarraProgreso estado={cotizacion.estado} />
+                      <p className="text-green-400 font-bold text-3xl">
+                        $
+                        {Number(
+                          cotizacion.precioFinal ||
+                            cotizacion.precioVenta ||
+                            0
+                        ).toLocaleString("es-MX")}
+                      </p>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5 text-sm">
-                      <div className="bg-zinc-900 rounded-xl p-3">
-                        <p className="text-zinc-500">Materiales</p>
-                        <p className="font-bold text-white">
-                          $
-                          {Number(
-                            cotizacion.totalMateriales || 0
-                          ).toLocaleString("es-MX")}
-                        </p>
+                      <div className="flex flex-col gap-3 mt-5">
+                        <Link
+                          to={`/cotizaciones/${cotizacion.id}`}
+                          className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-3 rounded-xl text-center"
+                        >
+                          📂 Abrir expediente
+                        </Link>
+
+                        <Link
+                          to={`/nueva-cotizacion?editar=${cotizacion.id}`}
+                          className="inline-block bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-5 py-3 rounded-xl text-center border border-zinc-700"
+                        >
+                          ✏️ Editar proyecto
+                        </Link>
                       </div>
-
-                      <div className="bg-zinc-900 rounded-xl p-3">
-                        <p className="text-zinc-500">Mano de obra</p>
-                        <p className="font-bold text-white">
-                          $
-                          {Number(cotizacion.manoObra || 0).toLocaleString(
-                            "es-MX"
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="bg-zinc-900 rounded-xl p-3">
-                        <p className="text-zinc-500">Descuento</p>
-                        <p className="font-bold text-red-400">
-                          -$
-                          {Number(cotizacion.descuento || 0).toLocaleString(
-                            "es-MX"
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="md:text-right min-w-44">
-                    <p className="text-zinc-500 text-sm">Precio final</p>
-
-                    <p className="text-green-400 font-bold text-3xl">
-                      $
-                      {Number(
-                        cotizacion.precioFinal ||
-                          cotizacion.precioVenta ||
-                          0
-                      ).toLocaleString("es-MX")}
-                    </p>
-
-                    <div className="flex flex-col gap-3 mt-5">
-                      <Link
-                        to={`/cotizaciones/${cotizacion.id}`}
-                        className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-3 rounded-xl text-center"
-                      >
-                        📂 Abrir expediente
-                      </Link>
-
-                      <Link
-                        to={`/nueva-cotizacion?editar=${cotizacion.id}`}
-                        className="inline-block bg-zinc-800 hover:bg-zinc-700 text-white font-bold px-5 py-3 rounded-xl text-center border border-zinc-700"
-                      >
-                        ✏️ Editar proyecto
-                      </Link>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {cotizaciones.length === 0 && (
               <p className="text-zinc-500 text-center py-8">

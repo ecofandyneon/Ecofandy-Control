@@ -23,6 +23,7 @@ function DetalleCotizacion() {
 
   const [cotizacion, setCotizacion] = useState(null);
   const [clienteActual, setClienteActual] = useState(null);
+  const [proyectoActual, setProyectoActual] = useState(null);
   const [archivos, setArchivos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [notasCotizacion, setNotasCotizacion] = useState("");
@@ -155,6 +156,9 @@ function DetalleCotizacion() {
 
   const correoCliente =
     clienteActual?.correo || cotizacion?.correo || "";
+
+  const estadoActual =
+    proyectoActual?.estado || cotizacion?.estado || "Pendiente";
 
   const generarPdf = async () => {
     try {
@@ -503,6 +507,13 @@ function DetalleCotizacion() {
                   pedidoId: null,
                   convertidaEnPedido: false,
                 };
+
+                setProyectoActual(null);
+              } else {
+                setProyectoActual({
+                  id: pedidoSnap.id,
+                  ...pedidoSnap.data(),
+                });
               }
             } catch (errorPedido) {
               console.error(
@@ -710,6 +721,12 @@ function DetalleCotizacion() {
         estado: "Aprobado",
       }));
 
+      setProyectoActual({
+        id: pedidoRef.id,
+        ...pedido,
+        estado: "Aprobado",
+      });
+
       alert("🚀 Cotización convertida en pedido correctamente.");
     } catch (error) {
       console.error("Error convirtiendo cotización en pedido:", error);
@@ -788,7 +805,7 @@ function DetalleCotizacion() {
           </p>
         </div>
 
-        <EstadoBadge estado={cotizacion.estado} />
+        <EstadoBadge estado={estadoActual} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -825,7 +842,7 @@ function DetalleCotizacion() {
             📌 Avance del expediente
           </h2>
 
-          <BarraProgreso estado={cotizacion.estado} />
+          <BarraProgreso estado={estadoActual} />
         </div>
 
         <div className="xl:col-span-3 bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
@@ -900,7 +917,7 @@ function DetalleCotizacion() {
             </p>
             <p>
               <span className="text-zinc-500">Estado:</span>{" "}
-              {cotizacion.estado}
+              {estadoActual}
             </p>
           </div>
         </div>

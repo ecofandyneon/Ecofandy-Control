@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  doc,
-  getDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
 import Swal from "sweetalert2";
 import { db } from "../Services/firebase";
 import EcoCard from "../Components/NeonUI/EcoCard";
 import EcoProgress from "../Components/NeonUI/EcoProgress";
 import useProduccion from "../Hooks/useProduccion";
+import { calcularAvance } from "../Utils/calcularAvance";
 
 const ETAPAS = [
   { id: "aprobado", nombre: "Aprobado", icono: "✅" },
@@ -20,17 +17,6 @@ const ETAPAS = [
   { id: "empaque", nombre: "Empaque", icono: "📦" },
   { id: "entregado", nombre: "Entregado", icono: "🚚" },
 ];
-
-const AVANCES = {
-  aprobado: 15,
-  corte: 30,
-  "corte cnc": 30,
-  "armado led": 50,
-  pruebas: 70,
-  finalizado: 85,
-  empaque: 95,
-  entregado: 100,
-};
 
 const SIGUIENTE_ETAPA = {
   aprobado: "Corte",
@@ -46,35 +32,24 @@ function normalizarEstado(estado = "") {
   return String(estado).trim().toLowerCase();
 }
 
-function calcularAvanceProduccion(estado) {
-  return AVANCES[normalizarEstado(estado)] ?? 0;
-}
-
 function perteneceAEtapa(proyecto, etapa) {
   const estado = normalizarEstado(proyecto.estado);
 
   switch (etapa.id) {
     case "aprobado":
       return estado === "aprobado";
-
     case "corte":
       return estado === "corte" || estado === "corte cnc";
-
     case "armado":
       return estado === "armado led";
-
     case "pruebas":
       return estado === "pruebas";
-
     case "finalizado":
       return estado === "finalizado";
-
     case "empaque":
       return estado === "empaque";
-
     case "entregado":
       return estado === "entregado";
-
     default:
       return false;
   }
@@ -105,8 +80,7 @@ function obtenerResumenPago(proyecto) {
   if (total > 0 && saldo <= 0) {
     return {
       texto: "LIQUIDADO",
-      clase:
-        "bg-green-950/60 border-green-500 text-green-300",
+      clase: "bg-green-950/60 border-green-500 text-green-300",
       pagado,
       saldo,
     };
@@ -115,8 +89,7 @@ function obtenerResumenPago(proyecto) {
   if (pagado > 0) {
     return {
       texto: "PAGO PARCIAL",
-      clase:
-        "bg-yellow-950/60 border-yellow-500 text-yellow-300",
+      clase: "bg-yellow-950/60 border-yellow-500 text-yellow-300",
       pagado,
       saldo,
     };
@@ -132,12 +105,8 @@ function obtenerResumenPago(proyecto) {
 
 function Produccion() {
   const { proyectos, loading } = useProduccion();
-
-  const [proyectosConCotizacion, setProyectosConCotizacion] =
-    useState([]);
-
-  const [cargandoCotizaciones, setCargandoCotizaciones] =
-    useState(true);
+  const [proyectosConCotizacion, setProyectosConCotizacion] = useState([]);
+  const [cargandoCotizaciones, setCargandoCotizaciones] = useState(true);
 
   useEffect(() => {
     const cargarCotizaciones = async () => {
@@ -198,18 +167,15 @@ function Produccion() {
 
   const avanzarEtapa = async (proyecto) => {
     const estadoActual = normalizarEstado(proyecto.estado);
-
-    const siguienteEstado =
-      SIGUIENTE_ETAPA[estadoActual];
+    const siguienteEstado = SIGUIENTE_ETAPA[estadoActual];
 
     if (!siguienteEstado) {
       Swal.fire({
         icon: "success",
-        title: "Proyecto entregado",
-        text: "Este pedido ya llegó al final del proceso.",
+        title: "Proceso terminado",
+        text: "Este pedido ya llegó al final del proceso de producción.",
         confirmButtonColor: "#7C3AED",
       });
-
       return;
     }
 
@@ -217,7 +183,7 @@ function Produccion() {
       icon: "question",
       title: "¿Avanzar etapa?",
       html: `
-        <b>${proyecto.codigo || "Proyecto"}</b><br><br>
+        <b>${proyecto.codigo || proyecto.folioCotizacion || "Proyecto"}</b><br><br>
         ${proyecto.estado} ➜ <b>${siguienteEstado}</b>
       `,
       showCancelButton: true,
@@ -230,14 +196,20 @@ function Produccion() {
     if (!confirmar.isConfirmed) return;
 
     try {
-      const proyectoRef = doc(
-        db,
-        "proyectos",
-        proyecto.id
-      );
+      const movimiento = {
+        estadoAnterior: proyecto.estado,
+        estadoNuevo: siguienteEstado,
+        fecha: Timestamp.now(),
+      };
 
-      await updateDoc(proyectoRef, {
+      const historialActual = Array.isArray(proyecto.historialProduccion)
+        ? proyecto.historialProduccion
+        : [];
+
+      await updateDoc(doc(db, "proyectos", proyecto.id), {
         estado: siguienteEstado,
+        avance: calcularAvance(siguienteEstado),
+        historialProduccion: [...historialActual, movimiento],
       });
 
       setProyectosConCotizacion((actuales) =>
@@ -246,6 +218,13 @@ function Produccion() {
             ? {
                 ...item,
                 estado: siguienteEstado,
+                avance: calcularAvance(siguienteEstado),
+                historialProduccion: [
+                  ...(Array.isArray(item.historialProduccion)
+                    ? item.historialProduccion
+                    : []),
+                  movimiento,
+                ],
               }
             : item
         )
@@ -254,7 +233,7 @@ function Produccion() {
       Swal.fire({
         icon: "success",
         title: "Etapa actualizada",
-        text: `${proyecto.codigo || "Proyecto"} ahora está en ${siguienteEstado}.`,
+        text: `${proyecto.codigo || proyecto.folioCotizacion || "Proyecto"} ahora está en ${siguienteEstado}.`,
         timer: 1600,
         showConfirmButton: false,
       });
@@ -285,16 +264,14 @@ function Produccion() {
       </h1>
 
       <p className="text-zinc-400 mb-8">
-        Visualiza todos los pedidos organizados por etapa de
-        producción.
+        Visualiza todos los pedidos organizados por etapa de producción.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         {ETAPAS.map((etapa) => {
-          const proyectosEtapa =
-            proyectosConCotizacion.filter((proyecto) =>
-              perteneceAEtapa(proyecto, etapa)
-            );
+          const proyectosEtapa = proyectosConCotizacion.filter(
+            (proyecto) => perteneceAEtapa(proyecto, etapa)
+          );
 
           return (
             <EcoCard key={etapa.id}>
@@ -315,13 +292,8 @@ function Produccion() {
                   </div>
                 ) : (
                   proyectosEtapa.map((proyecto) => {
-                    const resumenPago =
-                      obtenerResumenPago(proyecto);
-
-                    const avance =
-                      calcularAvanceProduccion(
-                        proyecto.estado
-                      );
+                    const resumenPago = obtenerResumenPago(proyecto);
+                    const avance = calcularAvance(proyecto.estado);
 
                     const siguienteEstado =
                       SIGUIENTE_ETAPA[
@@ -363,39 +335,27 @@ function Produccion() {
                         <div className="mt-3 text-xs text-zinc-500 space-y-1">
                           <div className="flex justify-between">
                             <span>Pagado</span>
-
                             <span>
-                              $
-                              {resumenPago.pagado.toLocaleString(
-                                "es-MX"
-                              )}
+                              ${resumenPago.pagado.toLocaleString("es-MX")}
                             </span>
                           </div>
 
                           <div className="flex justify-between">
                             <span>Saldo</span>
-
                             <span>
-                              $
-                              {resumenPago.saldo.toLocaleString(
-                                "es-MX"
-                              )}
+                              ${resumenPago.saldo.toLocaleString("es-MX")}
                             </span>
                           </div>
                         </div>
 
-                        {siguienteEstado && (
+                        {siguienteEstado ? (
                           <button
-                            onClick={() =>
-                              avanzarEtapa(proyecto)
-                            }
+                            onClick={() => avanzarEtapa(proyecto)}
                             className="w-full mt-4 bg-green-600 hover:bg-green-700 rounded-xl py-2 font-bold transition"
                           >
                             🚀 Avanzar a {siguienteEstado}
                           </button>
-                        )}
-
-                        {!siguienteEstado && (
+                        ) : (
                           <div className="mt-4 text-center text-green-400 font-bold">
                             ✅ Proceso terminado
                           </div>

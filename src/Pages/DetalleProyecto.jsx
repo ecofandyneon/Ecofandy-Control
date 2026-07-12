@@ -3,6 +3,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useParams, Link } from "react-router-dom";
 import { db } from "../Services/firebase";
 import Swal from "sweetalert2";
+import { calcularAvance } from "../Utils/calcularAvance";
 
 const ESTADOS = [
   "Aprobado",
@@ -13,16 +14,6 @@ const ESTADOS = [
   "Empaque",
   "Entregado",
 ];
-
-const AVANCE = {
-  Aprobado: 15,
-  Corte: 30,
-  "Armado LED": 50,
-  Pruebas: 70,
-  Finalizado: 85,
-  Empaque: 95,
-  Entregado: 100,
-};
 
 function moneda(valor) {
   return Number(valor || 0).toLocaleString("es-MX");
@@ -119,7 +110,7 @@ function DetalleProyecto() {
     cargarProyecto();
   }, [id]);
 
-  const avance = AVANCE[estado] ?? 15;
+  const avance = calcularAvance(estado);
 
   const total = Number(
     cotizacion?.precioFinal ||
@@ -169,6 +160,33 @@ function DetalleProyecto() {
 
   const medidas =
     cotizacion?.medidas || proyecto?.medidas || "";
+
+  const historialProduccion = Array.isArray(proyecto?.historialProduccion)
+    ? [...proyecto.historialProduccion].sort((a, b) => {
+        const fechaA = a.fecha?.seconds || 0;
+        const fechaB = b.fecha?.seconds || 0;
+        return fechaB - fechaA;
+      })
+    : [];
+
+  const formatearFechaHistorial = (fecha) => {
+    if (!fecha) return "Fecha no disponible";
+
+    const valorFecha = fecha.toDate
+      ? fecha.toDate()
+      : fecha.seconds
+        ? new Date(fecha.seconds * 1000)
+        : new Date(fecha);
+
+    if (Number.isNaN(valorFecha.getTime())) {
+      return "Fecha no disponible";
+    }
+
+    return valorFecha.toLocaleString("es-MX", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  };
 
   const guardarCambios = async () => {
     try {
@@ -494,6 +512,43 @@ function DetalleProyecto() {
             <p className="text-red-400 text-sm mt-4">
               ⚠️ Este proyecto no tiene una cotización relacionada.
             </p>
+          )}
+        </div>
+
+        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-3">
+          <h2 className="text-xl font-bold text-purple-400 mb-4">
+            🕒 Historial de producción
+          </h2>
+
+          {historialProduccion.length === 0 ? (
+            <p className="text-zinc-500">
+              Aún no hay movimientos de producción registrados.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {historialProduccion.map((movimiento, index) => (
+                <div
+                  key={`${movimiento.fecha?.seconds || index}-${index}`}
+                  className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                >
+                  <div>
+                    <p className="font-bold text-zinc-200">
+                      {movimiento.estadoAnterior || "Sin etapa"}{" "}
+                      <span className="text-purple-400">➜</span>{" "}
+                      {movimiento.estadoNuevo || "Sin etapa"}
+                    </p>
+
+                    <p className="text-sm text-zinc-500 mt-1">
+                      Cambio de etapa de producción
+                    </p>
+                  </div>
+
+                  <span className="text-sm text-purple-300">
+                    {formatearFechaHistorial(movimiento.fecha)}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
