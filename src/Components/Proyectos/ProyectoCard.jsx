@@ -3,49 +3,51 @@ import EstadoBadge from "./EstadoBadge";
 import EcoButton from "../NeonUI/EcoButton";
 import EcoCard from "../NeonUI/EcoCard";
 import EcoProgress from "../NeonUI/EcoProgress";
+import { calcularAvance } from "../../Utils/calcularAvance";
 
 function ProyectoCard({ proyecto, onDelete }) {
+  const avance = calcularAvance(proyecto.estado);
+
+  const cotizacion = proyecto.cotizacionRelacionada;
+
   const total = Number(
-    proyecto.total ||
+    cotizacion?.precioFinal ||
+      cotizacion?.precioVenta ||
       proyecto.precioFinal ||
       proyecto.precioVenta ||
-      proyecto.precio ||
-      proyecto.subtotal ||
       0
   );
 
-  const pagos = Array.isArray(proyecto.pagos)
-    ? proyecto.pagos
+  const pagos = Array.isArray(cotizacion?.pagos)
+    ? cotizacion.pagos
     : [];
 
-  const totalPagado = pagos.reduce(
+  const pagado = pagos.reduce(
     (suma, pago) => suma + Number(pago.monto || 0),
     0
   );
 
-  const anticipo = Number(proyecto.anticipo || 0);
-
-  const pagado = totalPagado > 0 ? totalPagado : anticipo;
-
   const saldo = Math.max(total - pagado, 0);
 
-  const avances = {
-    "Idea recibida": 5,
-    "Diseño / Render": 10,
-    Aprobado: 15,
-    Corte: 30,
-    "Armado LED": 50,
-    Pruebas: 70,
-    Finalizado: 85,
-    Empaque: 95,
-    Entregado: 100,
-    Liquidado: 100,
-  };
+  const estadoPago =
+    total > 0 && saldo <= 0
+      ? "LIQUIDADO"
+      : pagado > 0
+        ? "PAGO PARCIAL"
+        : "SIN PAGO";
 
-  const avance = avances[proyecto.estado] ?? 0;
+  const clasePago =
+    estadoPago === "LIQUIDADO"
+      ? "bg-green-950/60 border-green-500 text-green-300"
+      : estadoPago === "PAGO PARCIAL"
+        ? "bg-yellow-950/60 border-yellow-500 text-yellow-300"
+        : "bg-red-950/60 border-red-500 text-red-300";
 
   const abrirWhatsapp = () => {
-    const numero = (proyecto.whatsapp || "").replace(/\D/g, "");
+    const numero = String(proyecto.whatsapp || "").replace(
+      /\D/g,
+      ""
+    );
 
     if (!numero) return;
 
@@ -54,23 +56,25 @@ function ProyectoCard({ proyecto, onDelete }) {
 
     window.open(
       `https://wa.me/${numeroWhatsApp}`,
-      "_blank",
-      "noopener,noreferrer"
+      "_blank"
     );
   };
 
   return (
     <EcoCard>
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-start gap-3 mb-4">
         <h2 className="text-2xl font-bold text-purple-400">
-          {proyecto.codigo || proyecto.folio || "Sin código"}
+          {proyecto.codigo ||
+            proyecto.folio ||
+            proyecto.folioCotizacion ||
+            "Sin código"}
         </h2>
 
         <EstadoBadge estado={proyecto.estado} />
       </div>
 
       <h3 className="text-xl font-bold text-white capitalize">
-        {proyecto.cliente || proyecto.clienteNombre || "Sin cliente"}
+        {proyecto.cliente || "Sin cliente"}
       </h3>
 
       <p className="text-zinc-400 mt-1 mb-5">
@@ -85,7 +89,9 @@ function ProyectoCard({ proyecto, onDelete }) {
 
       <div className="space-y-3">
         <div className="flex justify-between">
-          <span className="text-zinc-500">💵 Total</span>
+          <span className="text-zinc-500">
+            💵 Total
+          </span>
 
           <span className="font-bold text-white">
             ${total.toLocaleString("es-MX")}
@@ -93,40 +99,59 @@ function ProyectoCard({ proyecto, onDelete }) {
         </div>
 
         <div className="flex justify-between">
-          <span className="text-zinc-500">💳 Pagado</span>
+          <span className="text-zinc-500">
+            💳 Pagado
+          </span>
 
-          <span className="font-bold text-yellow-400">
+          <span className="font-bold text-yellow-300">
             ${pagado.toLocaleString("es-MX")}
           </span>
         </div>
 
         <div className="flex justify-between">
-          <span className="text-zinc-500">💰 Saldo</span>
+          <span className="text-zinc-500">
+            💰 Saldo
+          </span>
 
           <span
             className={`font-bold ${
-              saldo <= 0 ? "text-green-400" : "text-red-400"
+              saldo <= 0
+                ? "text-green-400"
+                : "text-red-300"
             }`}
           >
             ${saldo.toLocaleString("es-MX")}
           </span>
         </div>
 
+        <div
+          className={`border rounded-xl px-3 py-2 text-center text-sm font-bold ${clasePago}`}
+        >
+          {estadoPago}
+        </div>
+
         <div className="flex justify-between">
-          <span className="text-zinc-500">📅 Entrega</span>
+          <span className="text-zinc-500">
+            📅 Entrega
+          </span>
 
           <span>{proyecto.fechaEntrega || "--"}</span>
         </div>
 
         <div className="flex justify-between">
-          <span className="text-zinc-500">🚚 Tipo</span>
+          <span className="text-zinc-500">
+            🚚 Tipo
+          </span>
 
           <span>{proyecto.tipoEntrega || "--"}</span>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mt-6">
-        <EcoButton variant="success" onClick={abrirWhatsapp}>
+        <EcoButton
+          variant="success"
+          onClick={abrirWhatsapp}
+        >
           📱 WhatsApp
         </EcoButton>
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   collection,
   getDocs,
+  getDoc,
   orderBy,
   query,
   deleteDoc,
@@ -15,28 +16,94 @@ import ProyectoCard from "../Components/Proyectos/ProyectoCard";
 function Proyectos() {
   const [proyectos, setProyectos] = useState([]);
   const [busqueda, setBusqueda] = useState("");
+  const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     cargarProyectos();
   }, []);
 
   const cargarProyectos = async () => {
-    const q = query(collection(db, "proyectos"), orderBy("creadoEn", "desc"));
-    const snapshot = await getDocs(q);
+    try {
+      setCargando(true);
 
-    const lista = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+      const q = query(
+        collection(db, "proyectos"),
+        orderBy("creadoEn", "desc")
+      );
 
-    setProyectos(lista);
+      const snapshot = await getDocs(q);
+
+      const lista = await Promise.all(
+        snapshot.docs.map(async (documento) => {
+          const proyecto = {
+            id: documento.id,
+            ...documento.data(),
+          };
+
+          if (!proyecto.cotizacionId) {
+            return {
+              ...proyecto,
+              cotizacionRelacionada: null,
+            };
+          }
+
+          try {
+            const cotizacionRef = doc(
+              db,
+              "cotizaciones",
+              proyecto.cotizacionId
+            );
+
+            const cotizacionSnap = await getDoc(cotizacionRef);
+
+            return {
+              ...proyecto,
+              cotizacionRelacionada: cotizacionSnap.exists()
+                ? {
+                    id: cotizacionSnap.id,
+                    ...cotizacionSnap.data(),
+                  }
+                : null,
+            };
+          } catch (error) {
+            console.error(
+              "Error cargando cotización relacionada:",
+              error
+            );
+
+            return {
+              ...proyecto,
+              cotizacionRelacionada: null,
+            };
+          }
+        })
+      );
+
+      setProyectos(lista);
+    } catch (error) {
+      console.error("Error cargando proyectos:", error);
+
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudieron cargar los proyectos.",
+        confirmButtonColor: "#7C3AED",
+      });
+    } finally {
+      setCargando(false);
+    }
   };
 
   const eliminarProyecto = async (proyecto) => {
     const confirmar = await Swal.fire({
       icon: "warning",
       title: "¿Eliminar proyecto?",
-      text: `Se eliminará ${proyecto.codigo || "este proyecto"}. Esta acción no se puede deshacer.`,
+      text: `Se eliminará ${
+        proyecto.codigo ||
+        proyecto.folio ||
+        proyecto.folioCotizacion ||
+        "este proyecto"
+      }. Esta acción no se puede deshacer.`,
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
       cancelButtonText: "Cancelar",
@@ -62,8 +129,11 @@ function Proyectos() {
   const filtrados = proyectos.filter((proyecto) => {
     const texto = `
       ${proyecto.codigo || ""}
+      ${proyecto.folio || ""}
+      ${proyecto.folioCotizacion || ""}
       ${proyecto.cliente || ""}
       ${proyecto.proyecto || ""}
+      ${proyecto.nombreProyecto || ""}
       ${proyecto.estado || ""}
       ${proyecto.whatsapp || ""}
     `.toLowerCase();
@@ -71,11 +141,21 @@ function Proyectos() {
     return texto.includes(busqueda.toLowerCase());
   });
 
+  if (cargando) {
+    return (
+      <div className="text-zinc-400 text-lg">
+        Cargando proyectos...
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-4xl font-bold text-purple-500">Proyectos</h1>
+          <h1 className="text-4xl font-bold text-purple-500">
+            Proyectos
+          </h1>
 
           <p className="text-zinc-400 mt-2">
             Centro de proyectos Ecofandy.
@@ -115,5 +195,4 @@ function Proyectos() {
     </div>
   );
 }
-
 export default Proyectos;

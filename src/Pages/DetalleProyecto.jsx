@@ -9,8 +9,8 @@ const ESTADOS = [
   "Corte",
   "Armado LED",
   "Pruebas",
-  "Foto final",
-  "Listo para entrega",
+  "Finalizado",
+  "Empaque",
   "Entregado",
 ];
 
@@ -19,26 +19,37 @@ const AVANCE = {
   Corte: 30,
   "Armado LED": 50,
   Pruebas: 70,
-  "Foto final": 85,
-  "Listo para entrega": 95,
+  Finalizado: 85,
+  Empaque: 95,
   Entregado: 100,
 };
+
+function moneda(valor) {
+  return Number(valor || 0).toLocaleString("es-MX");
+}
+
+function mostrarMedidas(medidas) {
+  if (!medidas) return "Sin medidas registradas";
+  if (typeof medidas === "string") return medidas;
+
+  const ancho = medidas.ancho || 0;
+  const alto = medidas.alto || 0;
+  return `${ancho} × ${alto} cm`;
+}
 
 function DetalleProyecto() {
   const { id } = useParams();
 
   const [proyecto, setProyecto] = useState(null);
+  const [cotizacion, setCotizacion] = useState(null);
+  const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
   const [cliente, setCliente] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [nombreProyecto, setNombreProyecto] = useState("");
   const [descripcion, setDescripcion] = useState("");
-
   const [estado, setEstado] = useState("Aprobado");
-  const [subtotal, setSubtotal] = useState("");
-  const [requiereFactura, setRequiereFactura] = useState(false);
-  const [anticipo, setAnticipo] = useState("");
   const [fechaEntrega, setFechaEntrega] = useState("");
   const [tipoEntrega, setTipoEntrega] = useState("Recoge en taller");
   const [notas, setNotas] = useState("");
@@ -47,10 +58,12 @@ function DetalleProyecto() {
   useEffect(() => {
     const cargarProyecto = async () => {
       try {
-        const docRef = doc(db, "proyectos", id);
-        const docSnap = await getDoc(docRef);
+        setCargando(true);
 
-        if (!docSnap.exists()) {
+        const proyectoRef = doc(db, "proyectos", id);
+        const proyectoSnap = await getDoc(proyectoRef);
+
+        if (!proyectoSnap.exists()) {
           Swal.fire({
             icon: "error",
             title: "Proyecto no encontrado",
@@ -59,120 +72,127 @@ function DetalleProyecto() {
           return;
         }
 
-        const data = { id: docSnap.id, ...docSnap.data() };
+        const data = {
+          id: proyectoSnap.id,
+          ...proyectoSnap.data(),
+        };
 
         setProyecto(data);
         setCliente(data.cliente || "");
         setWhatsapp(data.whatsapp || "");
-        setNombreProyecto(data.proyecto || "");
+        setNombreProyecto(data.proyecto || data.nombreProyecto || "");
         setDescripcion(data.descripcion || "");
-
-        const estadoInicial = ESTADOS.includes(data.estado)
-          ? data.estado
-          : "Aprobado";
-
-        setEstado(estadoInicial);
-        setSubtotal(data.subtotal ?? data.precio ?? data.total ?? "");
-        setRequiereFactura(Boolean(data.requiereFactura));
-        setAnticipo(data.anticipo ?? data.pagado ?? "");
+        setEstado(ESTADOS.includes(data.estado) ? data.estado : "Aprobado");
         setFechaEntrega(data.fechaEntrega || "");
         setTipoEntrega(data.tipoEntrega || "Recoge en taller");
         setNotas(data.notasInternas ?? data.notas ?? "");
         setFotosProceso(data.fotosProceso || "");
+
+        if (data.cotizacionId) {
+          const cotizacionRef = doc(db, "cotizaciones", data.cotizacionId);
+          const cotizacionSnap = await getDoc(cotizacionRef);
+
+          if (cotizacionSnap.exists()) {
+            setCotizacion({
+              id: cotizacionSnap.id,
+              ...cotizacionSnap.data(),
+            });
+          } else {
+            setCotizacion(null);
+          }
+        } else {
+          setCotizacion(null);
+        }
       } catch (error) {
-        console.error(error);
+        console.error("Error cargando proyecto:", error);
         Swal.fire({
           icon: "error",
           title: "Error",
           text: "No se pudo cargar el proyecto.",
           confirmButtonColor: "#7C3AED",
         });
+      } finally {
+        setCargando(false);
       }
     };
 
     cargarProyecto();
   }, [id]);
 
-  const iva = requiereFactura ? Number(subtotal || 0) * 0.16 : 0;
-  const total = Number(subtotal || 0) + iva;
-  const saldo = Math.max(total - Number(anticipo || 0), 0);
   const avance = AVANCE[estado] ?? 15;
 
-  const estadoPago = useMemo(() => {
-    if (total <= 0) return "Pendiente";
-    if (saldo <= 0) return "Liquidado";
-    if (Number(anticipo || 0) > 0) return "Anticipo recibido";
-    return "Pendiente de pago";
-  }, [total, saldo, anticipo]);
+  const total = Number(
+    cotizacion?.precioFinal ||
+      cotizacion?.precioVenta ||
+      proyecto?.precioFinal ||
+      proyecto?.precioVenta ||
+      0
+  );
 
-  const materialesHeredados =
-    proyecto?.materiales ||
-    proyecto?.materialesEstimados ||
-    proyecto?.detalleMateriales ||
-    "";
+  const pagos = Array.isArray(cotizacion?.pagos)
+    ? cotizacion.pagos
+    : [];
 
-  const renderHeredado =
-    proyecto?.renderAprobado ||
-    proyecto?.urlRender ||
-    proyecto?.renderUrl ||
-    "";
+  const totalPagado = useMemo(
+    () =>
+      pagos.reduce(
+        (suma, pago) => suma + Number(pago.monto || 0),
+        0
+      ),
+    [pagos]
+  );
 
-  const vectorHeredado =
-    proyecto?.archivoVector ||
-    proyecto?.vector ||
-    proyecto?.vectorUrl ||
-    "";
+  const saldo = Math.max(total - totalPagado, 0);
 
-  const medidasHeredadas =
-    proyecto?.medidasFinales ||
-    proyecto?.medidas ||
-    "";
+  const estadoPago =
+    total > 0 && saldo <= 0
+      ? "LIQUIDADO"
+      : totalPagado > 0
+        ? "PAGO PARCIAL"
+        : "SIN PAGO";
+
+  const materiales =
+    cotizacion?.materiales || proyecto?.materiales || [];
+
+  const archivos =
+    cotizacion?.archivos || proyecto?.archivos || [];
+
+  const renderAprobado = archivos.find(
+    (archivo) => archivo.categoria === "render-aprobado"
+  );
+
+  const archivoVector = archivos.find(
+    (archivo) =>
+      archivo.categoria === "svg" ||
+      archivo.categoria === "archivo-produccion"
+  );
+
+  const medidas =
+    cotizacion?.medidas || proyecto?.medidas || "";
 
   const guardarCambios = async () => {
     try {
       setGuardando(true);
 
-      await updateDoc(doc(db, "proyectos", id), {
+      const cambios = {
         cliente,
         whatsapp,
         proyecto: nombreProyecto,
+        nombreProyecto,
         descripcion,
         estado,
         avance,
-        subtotal: Number(subtotal || 0),
-        requiereFactura,
-        iva,
-        total,
-        precio: total,
-        anticipo: Number(anticipo || 0),
-        saldo,
-        estadoPago,
         fechaEntrega,
         tipoEntrega,
         notasInternas: notas,
         fotosProceso,
-      });
+      };
+
+      await updateDoc(doc(db, "proyectos", id), cambios);
 
       setProyecto((actual) => ({
         ...actual,
-        cliente,
-        whatsapp,
-        proyecto: nombreProyecto,
-        descripcion,
-        estado,
-        avance,
-        subtotal: Number(subtotal || 0),
-        requiereFactura,
-        iva,
-        total,
-        precio: total,
-        anticipo: Number(anticipo || 0),
-        saldo,
-        estadoPago,
-        fechaEntrega,
-        tipoEntrega,
-        notasInternas: notas,
-        fotosProceso,
+        ...cambios,
       }));
 
       Swal.fire({
@@ -182,7 +202,7 @@ function DetalleProyecto() {
         confirmButtonColor: "#7C3AED",
       });
     } catch (error) {
-      console.error(error);
+      console.error("Error guardando proyecto:", error);
 
       Swal.fire({
         icon: "error",
@@ -195,12 +215,12 @@ function DetalleProyecto() {
     }
   };
 
-  const marcarLiquidado = () => {
-    setAnticipo(total);
-  };
+  if (cargando) {
+    return <p className="text-zinc-400">Cargando proyecto...</p>;
+  }
 
   if (!proyecto) {
-    return <p className="text-zinc-400">Cargando proyecto...</p>;
+    return <p className="text-red-400">Proyecto no encontrado.</p>;
   }
 
   return (
@@ -215,8 +235,13 @@ function DetalleProyecto() {
       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mt-6 mb-8">
         <div>
           <h1 className="text-4xl font-bold text-purple-500">
-            {proyecto.codigo || "Sin código"} · {nombreProyecto || "Proyecto"}
+            {proyecto.codigo ||
+              proyecto.folio ||
+              proyecto.folioCotizacion ||
+              "Sin código"}{" "}
+            · {nombreProyecto || "Proyecto"}
           </h1>
+
           <p className="text-zinc-400 mt-2">
             {cliente || "Sin cliente"} · Centro de producción
           </p>
@@ -232,6 +257,7 @@ function DetalleProyecto() {
           <h2 className="text-xl font-bold text-purple-400">
             📌 Avance de producción
           </h2>
+
           <span className="font-bold text-purple-300">{avance}%</span>
         </div>
 
@@ -274,11 +300,7 @@ function DetalleProyecto() {
 
           <label className="text-zinc-400 text-sm">Medidas</label>
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mt-2 text-zinc-200">
-            {typeof medidasHeredadas === "object" && medidasHeredadas !== null
-         ? `${medidasHeredadas.ancho || 0} × ${
-             medidasHeredadas.alto || 0
-            } cm`
-          : medidasHeredadas || "Sin medidas registradas"}
+            {mostrarMedidas(medidas)}
           </div>
         </div>
 
@@ -303,6 +325,7 @@ function DetalleProyecto() {
               <label className="text-zinc-400 text-sm">
                 Fecha estimada de entrega
               </label>
+
               <input
                 className="input mt-2"
                 type="date"
@@ -312,7 +335,10 @@ function DetalleProyecto() {
             </div>
 
             <div>
-              <label className="text-zinc-400 text-sm">Tipo de entrega</label>
+              <label className="text-zinc-400 text-sm">
+                Tipo de entrega
+              </label>
+
               <select
                 className="input mt-2"
                 value={tipoEntrega}
@@ -329,6 +355,7 @@ function DetalleProyecto() {
           <label className="text-zinc-400 text-sm block mt-4">
             Fotos / enlaces del proceso
           </label>
+
           <textarea
             className="input min-h-28 mt-2"
             value={fotosProceso}
@@ -345,41 +372,74 @@ function DetalleProyecto() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
               <p className="text-zinc-400 text-sm mb-2">Render aprobado</p>
-              <p className="text-zinc-200 break-all">
-                {renderHeredado || "Sin render registrado"}
-              </p>
+              {renderAprobado ? (
+                <a
+                  href={renderAprobado.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-purple-300 hover:text-purple-200 break-all"
+                >
+                  👁 Ver render aprobado
+                </a>
+              ) : (
+                <p className="text-zinc-200">Sin render registrado</p>
+              )}
             </div>
 
             <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
               <p className="text-zinc-400 text-sm mb-2">Archivo vector</p>
-              <p className="text-zinc-200 break-all">
-                {vectorHeredado || "Sin vector registrado"}
-              </p>
+              {archivoVector ? (
+                <a
+                  href={archivoVector.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-purple-300 hover:text-purple-200 break-all"
+                >
+                  👁 Ver archivo vector
+                </a>
+              ) : (
+                <p className="text-zinc-200">Sin vector registrado</p>
+              )}
             </div>
           </div>
 
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mt-4">
-            <p className="text-zinc-400 text-sm mb-2">
+            <p className="text-zinc-400 text-sm mb-3">
               Materiales / información técnica
             </p>
-            <p className="text-zinc-200 whitespace-pre-wrap">
-              {Array.isArray(materialesHeredados)
-                ? materialesHeredados
-                 .map(
-              (material) =>
-               `${material.nombre || "Material"}${
-                material.descripcionCantidad
-              ? ` · ${material.descripcionCantidad}`
-              : ""
-          }`
-      )
-      .join("\n")
-  : materialesHeredados || "Sin materiales registrados"}
-            </p>
+
+            {Array.isArray(materiales) && materiales.length > 0 ? (
+              <div className="space-y-2">
+                {materiales.map((material, index) => (
+                  <div
+                    key={`${material.articuloId || material.nombre}-${index}`}
+                    className="flex justify-between gap-4 border-b border-zinc-800 pb-2"
+                  >
+                    <div>
+                      <p className="font-bold text-zinc-200">
+                        {material.nombre || "Material"}
+                      </p>
+                      <p className="text-sm text-zinc-500">
+                        {material.descripcionCantidad || ""}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-zinc-200">
+                {typeof materiales === "string"
+                  ? materiales
+                  : "Sin materiales registrados"}
+              </p>
+            )}
           </div>
 
           <div className="mt-4">
-            <label className="text-zinc-400 text-sm">Descripción del trabajo</label>
+            <label className="text-zinc-400 text-sm">
+              Descripción del trabajo
+            </label>
+
             <textarea
               className="input min-h-32 mt-2"
               value={descripcion}
@@ -393,58 +453,48 @@ function DetalleProyecto() {
             💰 Pago
           </h2>
 
+          <p className="text-zinc-500 text-sm mb-4">
+            Información tomada directamente de la cotización.
+          </p>
+
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-4 space-y-3">
             <div className="flex justify-between gap-4">
-              <span className="text-zinc-400">Subtotal</span>
-              <strong>${Number(subtotal || 0).toLocaleString("es-MX")}</strong>
+              <span className="text-zinc-400">Total</span>
+              <strong className="text-green-400">
+                ${moneda(total)}
+              </strong>
             </div>
 
             <div className="flex justify-between gap-4">
-              <span className="text-zinc-400">IVA</span>
-              <strong>${iva.toLocaleString("es-MX")}</strong>
+              <span className="text-zinc-400">Pagado</span>
+              <strong>${moneda(totalPagado)}</strong>
             </div>
 
             <div className="flex justify-between gap-4 border-t border-zinc-800 pt-3">
-              <span className="text-zinc-300">Total</span>
-              <strong className="text-green-400">
-                ${total.toLocaleString("es-MX")}
+              <span className="text-zinc-300">Saldo</span>
+              <strong className={saldo <= 0 ? "text-green-400" : "text-yellow-300"}>
+                ${moneda(saldo)}
               </strong>
             </div>
           </div>
 
-          <label className="text-zinc-400 text-sm">Anticipo / pagado</label>
-          <input
-            className="input mt-2 mb-4"
-            type="number"
-            min="0"
-            value={anticipo}
-            onChange={(e) => setAnticipo(e.target.value)}
-          />
-
-          <div className="bg-purple-600/20 text-purple-300 rounded-xl p-4 mb-4">
-            <p className="text-sm">Saldo pendiente</p>
-            <p className="text-3xl font-bold">
-              ${saldo.toLocaleString("es-MX")}
-            </p>
-          </div>
-
-          <p
-            className={`font-bold mb-4 ${
-              estadoPago === "Liquidado"
-                ? "text-green-400"
-                : "text-yellow-400"
+          <div
+            className={`rounded-xl border p-4 font-bold text-center ${
+              estadoPago === "LIQUIDADO"
+                ? "bg-green-950/60 border-green-500 text-green-300"
+                : estadoPago === "PAGO PARCIAL"
+                  ? "bg-yellow-950/60 border-yellow-500 text-yellow-300"
+                  : "bg-red-950/60 border-red-500 text-red-300"
             }`}
           >
             {estadoPago}
-          </p>
+          </div>
 
-          <button
-            type="button"
-            onClick={marcarLiquidado}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl"
-          >
-            ✅ Marcar como liquidado
-          </button>
+          {!cotizacion && (
+            <p className="text-red-400 text-sm mt-4">
+              ⚠️ Este proyecto no tiene una cotización relacionada.
+            </p>
+          )}
         </div>
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-3">
@@ -466,7 +516,9 @@ function DetalleProyecto() {
         disabled={guardando}
         className="mt-8 w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold py-4 rounded-xl"
       >
-        {guardando ? "Guardando..." : "💜 Guardar cambios de producción"}
+        {guardando
+          ? "Guardando..."
+          : "💜 Guardar cambios de producción"}
       </button>
     </div>
   );

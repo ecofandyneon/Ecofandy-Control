@@ -1,57 +1,180 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../Services/firebase";
 import EcoCard from "../Components/NeonUI/EcoCard";
 import EcoProgress from "../Components/NeonUI/EcoProgress";
 import useProduccion from "../Hooks/useProduccion";
-import { ETAPAS_PRODUCCION } from "../Config/etapasProduccion";
-import { calcularAvance } from "../Utils/calcularAvance";
+
+const ETAPAS = [
+  { id: "aprobado", nombre: "Aprobado", icono: "✅" },
+  { id: "corte", nombre: "Corte", icono: "✂️" },
+  { id: "armado", nombre: "Armado LED", icono: "💡" },
+  { id: "pruebas", nombre: "Pruebas", icono: "🧪" },
+  { id: "finalizado", nombre: "Finalizado", icono: "✨" },
+  { id: "empaque", nombre: "Empaque", icono: "📦" },
+  { id: "entregado", nombre: "Entregado", icono: "🚚" },
+];
+
+const AVANCES = {
+  aprobado: 15,
+  corte: 30,
+  "corte cnc": 30,
+  "armado led": 50,
+  pruebas: 70,
+  finalizado: 85,
+  empaque: 95,
+  entregado: 100,
+};
+
+function normalizarEstado(estado = "") {
+  return String(estado).trim().toLowerCase();
+}
+
+function calcularAvanceProduccion(estado) {
+  return AVANCES[normalizarEstado(estado)] ?? 0;
+}
+
+function perteneceAEtapa(proyecto, etapa) {
+  const estado = normalizarEstado(proyecto.estado);
+
+  switch (etapa.id) {
+    case "aprobado":
+      return estado === "aprobado";
+    case "corte":
+      return estado === "corte" || estado === "corte cnc";
+    case "armado":
+      return estado === "armado led";
+    case "pruebas":
+      return estado === "pruebas";
+    case "finalizado":
+      return estado === "finalizado";
+    case "empaque":
+      return estado === "empaque";
+    case "entregado":
+      return estado === "entregado";
+    default:
+      return false;
+  }
+}
+
+function obtenerResumenPago(proyecto) {
+  const cotizacion = proyecto.cotizacionRelacionada;
+
+  const total = Number(
+    cotizacion?.precioFinal ||
+      cotizacion?.precioVenta ||
+      proyecto.precioFinal ||
+      proyecto.precioVenta ||
+      0
+  );
+
+  const pagos = Array.isArray(cotizacion?.pagos)
+    ? cotizacion.pagos
+    : [];
+
+  const pagado = pagos.reduce(
+    (suma, pago) => suma + Number(pago.monto || 0),
+    0
+  );
+
+  const saldo = Math.max(total - pagado, 0);
+
+  if (total > 0 && saldo <= 0) {
+    return {
+      texto: "LIQUIDADO",
+      clase: "bg-green-950/60 border-green-500 text-green-300",
+      pagado,
+      saldo,
+    };
+  }
+
+  if (pagado > 0) {
+    return {
+      texto: "PAGO PARCIAL",
+      clase: "bg-yellow-950/60 border-yellow-500 text-yellow-300",
+      pagado,
+      saldo,
+    };
+  }
+
+  return {
+    texto: "SIN PAGO",
+    clase: "bg-red-950/60 border-red-500 text-red-300",
+    pagado,
+    saldo,
+  };
+}
 
 function Produccion() {
   const { proyectos, loading } = useProduccion();
+  const [proyectosConCotizacion, setProyectosConCotizacion] = useState([]);
+  const [cargandoCotizaciones, setCargandoCotizaciones] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    const cargarCotizaciones = async () => {
+      if (loading) return;
+
+      try {
+        setCargandoCotizaciones(true);
+
+        const proyectosHidratados = await Promise.all(
+          proyectos.map(async (proyecto) => {
+            if (!proyecto.cotizacionId) {
+              return {
+                ...proyecto,
+                cotizacionRelacionada: null,
+              };
+            }
+
+            try {
+              const cotizacionRef = doc(
+                db,
+                "cotizaciones",
+                proyecto.cotizacionId
+              );
+
+              const cotizacionSnap = await getDoc(cotizacionRef);
+
+              return {
+                ...proyecto,
+                cotizacionRelacionada: cotizacionSnap.exists()
+                  ? {
+                      id: cotizacionSnap.id,
+                      ...cotizacionSnap.data(),
+                    }
+                  : null,
+              };
+            } catch (error) {
+              console.error(
+                "Error cargando cotización relacionada:",
+                error
+              );
+
+              return {
+                ...proyecto,
+                cotizacionRelacionada: null,
+              };
+            }
+          })
+        );
+
+        setProyectosConCotizacion(proyectosHidratados);
+      } finally {
+        setCargandoCotizaciones(false);
+      }
+    };
+
+    cargarCotizaciones();
+  }, [proyectos, loading]);
+
+  if (loading || cargandoCotizaciones) {
     return (
       <div className="text-zinc-400 text-lg">
         Cargando Centro de Producción...
       </div>
     );
   }
-
-  const obtenerProyectosPorEtapa = (nombreEtapa) => {
-    return proyectos.filter((proyecto) => {
-      const estado = (proyecto.estado || "").trim();
-
-      switch (nombreEtapa) {
-        case "Diseño":
-          return (
-            estado === "Idea recibida" ||
-            estado === "Diseño / Render"
-          );
-
-        case "Corte CNC":
-          return (
-            estado === "Corte" ||
-            estado === "Corte CNC"
-          );
-
-        case "Armado LED":
-          return estado === "Armado LED";
-
-        case "Pruebas":
-          return estado === "Pruebas";
-
-        case "Entrega":
-          return (
-            estado === "Finalizado" ||
-            estado === "Empaque" ||
-            estado === "Entregado" ||
-            estado === "Liquidado"
-          );
-
-        default:
-          return false;
-      }
-    });
-  };
 
   return (
     <div>
@@ -60,12 +183,14 @@ function Produccion() {
       </h1>
 
       <p className="text-zinc-400 mb-8">
-        Visualiza todos los proyectos organizados por etapa.
+        Visualiza todos los pedidos organizados por etapa de producción.
       </p>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
-        {ETAPAS_PRODUCCION.map((etapa) => {
-          const proyectosEtapa = obtenerProyectosPorEtapa(etapa.nombre);
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+        {ETAPAS.map((etapa) => {
+          const proyectosEtapa = proyectosConCotizacion.filter(
+            (proyecto) => perteneceAEtapa(proyecto, etapa)
+          );
 
           return (
             <EcoCard key={etapa.id}>
@@ -85,39 +210,71 @@ function Produccion() {
                     Sin proyectos
                   </div>
                 ) : (
-                  proyectosEtapa.map((proyecto) => (
-                    <div
-                      key={proyecto.id}
-                      className="bg-zinc-900 rounded-xl border border-zinc-700 p-4"
-                    >
-                      <div className="flex justify-between mb-2">
-                        <span className="font-bold text-purple-400">
-                          {proyecto.codigo || "Sin código"}
-                        </span>
-                      </div>
+                  proyectosEtapa.map((proyecto) => {
+                    const resumenPago = obtenerResumenPago(proyecto);
+                    const avance = calcularAvanceProduccion(
+                      proyecto.estado
+                    );
 
-                      <h3 className="font-bold text-white">
-                        {proyecto.cliente}
-                      </h3>
-
-                      <p className="text-zinc-400 text-sm mb-3">
-                        {proyecto.proyecto}
-                      </p>
-
-                      <EcoProgress
-                        value={calcularAvance(proyecto.estado)}
-                      />
-
-                      <Link
-                        to={`/proyectos/${proyecto.id}`}
-                        className="block mt-4"
+                    return (
+                      <div
+                        key={proyecto.id}
+                        className="bg-zinc-900 rounded-xl border border-zinc-700 p-4"
                       >
-                        <button className="w-full bg-purple-600 hover:bg-purple-700 rounded-xl py-2 font-bold transition">
-                          📂 Abrir
-                        </button>
-                      </Link>
-                    </div>
-                  ))
+                        <div className="flex justify-between items-start gap-3">
+                          <span className="font-bold text-purple-400">
+                            {proyecto.codigo ||
+                              proyecto.folio ||
+                              proyecto.folioCotizacion ||
+                              "Sin código"}
+                          </span>
+
+                          <span
+                            className={`text-xs font-bold border px-2 py-1 rounded-full ${resumenPago.clase}`}
+                          >
+                            {resumenPago.texto}
+                          </span>
+                        </div>
+
+                        <h3 className="font-bold text-white mt-2">
+                          {proyecto.cliente || "Sin cliente"}
+                        </h3>
+
+                        <p className="text-zinc-400 text-sm mb-3">
+                          {proyecto.proyecto ||
+                            proyecto.nombreProyecto ||
+                            "Sin nombre de proyecto"}
+                        </p>
+
+                        <EcoProgress value={avance} />
+
+                        <div className="mt-3 text-xs text-zinc-500 space-y-1">
+                          <div className="flex justify-between">
+                            <span>Pagado</span>
+                            <span>
+                              ${resumenPago.pagado.toLocaleString("es-MX")}
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between">
+                            <span>Saldo</span>
+                            <span>
+                              ${resumenPago.saldo.toLocaleString("es-MX")}
+                            </span>
+                          </div>
+                        </div>
+
+                        <Link
+                          to={`/proyectos/${proyecto.id}`}
+                          className="block mt-4"
+                        >
+                          <button className="w-full bg-purple-600 hover:bg-purple-700 rounded-xl py-2 font-bold transition">
+                            📂 Abrir
+                          </button>
+                        </Link>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </EcoCard>
