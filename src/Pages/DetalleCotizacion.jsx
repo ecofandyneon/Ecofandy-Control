@@ -480,16 +480,50 @@ function DetalleCotizacion() {
             ...documento.data(),
           };
 
-          setCotizacion(datosCotizacion);
-          setArchivos(datosCotizacion.archivos || []);
-          setNotasCotizacion(datosCotizacion.notasCotizacion || "");
+          let cotizacionVerificada = datosCotizacion;
 
-          if (datosCotizacion.clienteId) {
+          if (datosCotizacion.pedidoId) {
+            try {
+              const pedidoRef = doc(
+                db,
+                "proyectos",
+                datosCotizacion.pedidoId
+              );
+              const pedidoSnap = await getDoc(pedidoRef);
+
+              if (!pedidoSnap.exists()) {
+                await updateDoc(referencia, {
+                  pedidoId: null,
+                  convertidaEnPedido: false,
+                  actualizadoEn: serverTimestamp(),
+                });
+
+                cotizacionVerificada = {
+                  ...datosCotizacion,
+                  pedidoId: null,
+                  convertidaEnPedido: false,
+                };
+              }
+            } catch (errorPedido) {
+              console.error(
+                "Error verificando pedido relacionado:",
+                errorPedido
+              );
+            }
+          }
+
+          setCotizacion(cotizacionVerificada);
+          setArchivos(cotizacionVerificada.archivos || []);
+          setNotasCotizacion(
+            cotizacionVerificada.notasCotizacion || ""
+          );
+
+          if (cotizacionVerificada.clienteId) {
             try {
               const clienteRef = doc(
                 db,
                 "clientes",
-                datosCotizacion.clienteId
+                cotizacionVerificada.clienteId
               );
               const clienteSnap = await getDoc(clienteRef);
 
@@ -643,6 +677,8 @@ function DetalleCotizacion() {
               : "Pago contra entrega",
         cotizacionId: id,
         folioCotizacion: cotizacion.folio || "",
+        folio: cotizacion.folio || "",
+        codigo: cotizacion.folio || "",
         precioFinal: precioTotal,
         precioVenta: precioTotal,
         totalMateriales: Number(cotizacion.totalMateriales || 0),
