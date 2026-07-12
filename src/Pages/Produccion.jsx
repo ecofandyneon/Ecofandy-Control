@@ -165,6 +165,45 @@ function Produccion() {
     cargarCotizaciones();
   }, [proyectos, loading]);
 
+  const avisarCliente = (proyecto) => {
+    const numero = String(proyecto.whatsapp || "").replace(/\D/g, "");
+
+    if (!numero) {
+      Swal.fire({
+        icon: "warning",
+        title: "Sin WhatsApp",
+        text: "Este proyecto no tiene un número de WhatsApp registrado.",
+        confirmButtonColor: "#7C3AED",
+      });
+      return;
+    }
+
+    const numeroWhatsApp =
+      numero.length === 10 ? `52${numero}` : numero;
+
+    const avance = calcularAvance(proyecto.estado);
+
+    const mensaje = [
+      `Hola ${proyecto.cliente || ""} 👋`,
+      "",
+      `Te comparto una actualización de tu proyecto *${proyecto.proyecto || proyecto.nombreProyecto || "Ecofandy"}*.`,
+      "",
+      `🏭 Etapa actual: *${proyecto.estado || "En producción"}*`,
+      `📊 Avance: *${avance}%*`,
+      "",
+      "Seguimos trabajando en tu proyecto. Muchas gracias por tu confianza. 💜",
+      "",
+      "Ecofandy Neon",
+      "ILUMINAMOS TUS IDEAS ✨",
+    ].join("\n");
+
+    window.open(
+      `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(mensaje)}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
+
   const avanzarEtapa = async (proyecto) => {
     const estadoActual = normalizarEstado(proyecto.estado);
     const siguienteEstado = SIGUIENTE_ETAPA[estadoActual];
@@ -360,6 +399,13 @@ function Produccion() {
                             ✅ Proceso terminado
                           </div>
                         )}
+
+                        <button
+                          onClick={() => avisarCliente(proyecto)}
+                          className="w-full mt-3 bg-green-700 hover:bg-green-800 rounded-xl py-2 font-bold transition"
+                        >
+                          📱 Avisar al cliente
+                        </button>
 
                         <Link
                           to={`/proyectos/${proyecto.id}`}

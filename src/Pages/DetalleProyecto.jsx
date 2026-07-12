@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
 import { useParams, Link } from "react-router-dom";
 import { db } from "../Services/firebase";
 import Swal from "sweetalert2";
+import SubirArchivo from "../Components/Archivos/SubirArchivo";
 import { calcularAvance } from "../Utils/calcularAvance";
 
 const ESTADOS = [
@@ -45,6 +46,7 @@ function DetalleProyecto() {
   const [tipoEntrega, setTipoEntrega] = useState("Recoge en taller");
   const [notas, setNotas] = useState("");
   const [fotosProceso, setFotosProceso] = useState("");
+  const [archivosProceso, setArchivosProceso] = useState([]);
 
   useEffect(() => {
     const cargarProyecto = async () => {
@@ -78,6 +80,9 @@ function DetalleProyecto() {
         setTipoEntrega(data.tipoEntrega || "Recoge en taller");
         setNotas(data.notasInternas ?? data.notas ?? "");
         setFotosProceso(data.fotosProceso || "");
+        setArchivosProceso(
+          Array.isArray(data.archivosProceso) ? data.archivosProceso : []
+        );
 
         if (data.cotizacionId) {
           const cotizacionRef = doc(db, "cotizaciones", data.cotizacionId);
@@ -259,6 +264,46 @@ function DetalleProyecto() {
   const tiempoTotalProduccion = inicioProduccion
     ? Date.now() - inicioProduccion.getTime()
     : null;
+
+  const registrarFotoProceso = async (archivo) => {
+    try {
+      const archivoProceso = {
+        ...archivo,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        categoria: "foto-proceso",
+        etapa: estado,
+        fechaSubida: new Date().toISOString(),
+      };
+
+      await updateDoc(doc(db, "proyectos", id), {
+        archivosProceso: arrayUnion(archivoProceso),
+        actualizadoEn: serverTimestamp(),
+      });
+
+      setArchivosProceso((actuales) => [
+        ...actuales,
+        archivoProceso,
+      ]);
+
+      Swal.fire({
+        icon: "success",
+        title: "Foto guardada",
+        text: `La evidencia quedó registrada en la etapa ${estado}.`,
+        confirmButtonColor: "#7C3AED",
+      });
+    } catch (error) {
+      console.error("Error guardando foto de proceso:", error);
+
+      Swal.fire({
+        icon: "error",
+        title: "No se pudo guardar",
+        text: "Ocurrió un error al registrar la foto del proceso.",
+        confirmButtonColor: "#7C3AED",
+      });
+
+      throw error;
+    }
+  };
 
   const guardarCambios = async () => {
     try {
@@ -584,6 +629,65 @@ function DetalleProyecto() {
             <p className="text-red-400 text-sm mt-4">
               ⚠️ Este proyecto no tiene una cotización relacionada.
             </p>
+          )}
+        </div>
+
+        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-3">
+          <h2 className="text-xl font-bold text-purple-400 mb-2">
+            📷 Fotos del proceso
+          </h2>
+
+          <p className="text-zinc-500 mb-5">
+            Cada foto se guarda automáticamente con la etapa actual: {estado}.
+          </p>
+
+          <SubirArchivo
+            carpeta={`proyectos/${proyecto.codigo || proyecto.id}/proceso`}
+            onArchivoSubido={registrarFotoProceso}
+          />
+
+          {archivosProceso.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+              {[...archivosProceso].reverse().map((archivo) => (
+                <div
+                  key={archivo.id || archivo.url}
+                  className="bg-zinc-950 border border-zinc-800 rounded-xl p-3"
+                >
+                  {archivo.url && archivo.tipo?.startsWith("image/") ? (
+                    <a
+                      href={archivo.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <img
+                        src={archivo.url}
+                        alt={archivo.nombreOriginal || "Foto del proceso"}
+                        className="w-full h-52 object-contain rounded-lg bg-black"
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      href={archivo.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-purple-300 break-all"
+                    >
+                      📎 {archivo.nombreOriginal || archivo.nombre || "Archivo"}
+                    </a>
+                  )}
+
+                  <p className="text-purple-300 font-bold mt-3">
+                    {archivo.etapa || "Proceso"}
+                  </p>
+
+                  <p className="text-zinc-500 text-xs mt-1">
+                    {archivo.fechaSubida
+                      ? new Date(archivo.fechaSubida).toLocaleString("es-MX")
+                      : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
