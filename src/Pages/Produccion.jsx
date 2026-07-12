@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+} from "firebase/firestore";
+import Swal from "sweetalert2";
 import { db } from "../Services/firebase";
 import EcoCard from "../Components/NeonUI/EcoCard";
 import EcoProgress from "../Components/NeonUI/EcoProgress";
@@ -27,6 +32,16 @@ const AVANCES = {
   entregado: 100,
 };
 
+const SIGUIENTE_ETAPA = {
+  aprobado: "Corte",
+  corte: "Armado LED",
+  "corte cnc": "Armado LED",
+  "armado led": "Pruebas",
+  pruebas: "Finalizado",
+  finalizado: "Empaque",
+  empaque: "Entregado",
+};
+
 function normalizarEstado(estado = "") {
   return String(estado).trim().toLowerCase();
 }
@@ -41,18 +56,25 @@ function perteneceAEtapa(proyecto, etapa) {
   switch (etapa.id) {
     case "aprobado":
       return estado === "aprobado";
+
     case "corte":
       return estado === "corte" || estado === "corte cnc";
+
     case "armado":
       return estado === "armado led";
+
     case "pruebas":
       return estado === "pruebas";
+
     case "finalizado":
       return estado === "finalizado";
+
     case "empaque":
       return estado === "empaque";
+
     case "entregado":
       return estado === "entregado";
+
     default:
       return false;
   }
@@ -83,7 +105,8 @@ function obtenerResumenPago(proyecto) {
   if (total > 0 && saldo <= 0) {
     return {
       texto: "LIQUIDADO",
-      clase: "bg-green-950/60 border-green-500 text-green-300",
+      clase:
+        "bg-green-950/60 border-green-500 text-green-300",
       pagado,
       saldo,
     };
@@ -92,7 +115,8 @@ function obtenerResumenPago(proyecto) {
   if (pagado > 0) {
     return {
       texto: "PAGO PARCIAL",
-      clase: "bg-yellow-950/60 border-yellow-500 text-yellow-300",
+      clase:
+        "bg-yellow-950/60 border-yellow-500 text-yellow-300",
       pagado,
       saldo,
     };
@@ -108,8 +132,12 @@ function obtenerResumenPago(proyecto) {
 
 function Produccion() {
   const { proyectos, loading } = useProduccion();
-  const [proyectosConCotizacion, setProyectosConCotizacion] = useState([]);
-  const [cargandoCotizaciones, setCargandoCotizaciones] = useState(true);
+
+  const [proyectosConCotizacion, setProyectosConCotizacion] =
+    useState([]);
+
+  const [cargandoCotizaciones, setCargandoCotizaciones] =
+    useState(true);
 
   useEffect(() => {
     const cargarCotizaciones = async () => {
@@ -168,6 +196,80 @@ function Produccion() {
     cargarCotizaciones();
   }, [proyectos, loading]);
 
+  const avanzarEtapa = async (proyecto) => {
+    const estadoActual = normalizarEstado(proyecto.estado);
+
+    const siguienteEstado =
+      SIGUIENTE_ETAPA[estadoActual];
+
+    if (!siguienteEstado) {
+      Swal.fire({
+        icon: "success",
+        title: "Proyecto entregado",
+        text: "Este pedido ya llegó al final del proceso.",
+        confirmButtonColor: "#7C3AED",
+      });
+
+      return;
+    }
+
+    const confirmar = await Swal.fire({
+      icon: "question",
+      title: "¿Avanzar etapa?",
+      html: `
+        <b>${proyecto.codigo || "Proyecto"}</b><br><br>
+        ${proyecto.estado} ➜ <b>${siguienteEstado}</b>
+      `,
+      showCancelButton: true,
+      confirmButtonText: `Sí, pasar a ${siguienteEstado}`,
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#7C3AED",
+      cancelButtonColor: "#52525B",
+    });
+
+    if (!confirmar.isConfirmed) return;
+
+    try {
+      const proyectoRef = doc(
+        db,
+        "proyectos",
+        proyecto.id
+      );
+
+      await updateDoc(proyectoRef, {
+        estado: siguienteEstado,
+      });
+
+      setProyectosConCotizacion((actuales) =>
+        actuales.map((item) =>
+          item.id === proyecto.id
+            ? {
+                ...item,
+                estado: siguienteEstado,
+              }
+            : item
+        )
+      );
+
+      Swal.fire({
+        icon: "success",
+        title: "Etapa actualizada",
+        text: `${proyecto.codigo || "Proyecto"} ahora está en ${siguienteEstado}.`,
+        timer: 1600,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      console.error("Error avanzando etapa:", error);
+
+      Swal.fire({
+        icon: "error",
+        title: "No se pudo actualizar",
+        text: "Ocurrió un error al cambiar la etapa.",
+        confirmButtonColor: "#7C3AED",
+      });
+    }
+  };
+
   if (loading || cargandoCotizaciones) {
     return (
       <div className="text-zinc-400 text-lg">
@@ -183,14 +285,16 @@ function Produccion() {
       </h1>
 
       <p className="text-zinc-400 mb-8">
-        Visualiza todos los pedidos organizados por etapa de producción.
+        Visualiza todos los pedidos organizados por etapa de
+        producción.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         {ETAPAS.map((etapa) => {
-          const proyectosEtapa = proyectosConCotizacion.filter(
-            (proyecto) => perteneceAEtapa(proyecto, etapa)
-          );
+          const proyectosEtapa =
+            proyectosConCotizacion.filter((proyecto) =>
+              perteneceAEtapa(proyecto, etapa)
+            );
 
           return (
             <EcoCard key={etapa.id}>
@@ -211,10 +315,18 @@ function Produccion() {
                   </div>
                 ) : (
                   proyectosEtapa.map((proyecto) => {
-                    const resumenPago = obtenerResumenPago(proyecto);
-                    const avance = calcularAvanceProduccion(
-                      proyecto.estado
-                    );
+                    const resumenPago =
+                      obtenerResumenPago(proyecto);
+
+                    const avance =
+                      calcularAvanceProduccion(
+                        proyecto.estado
+                      );
+
+                    const siguienteEstado =
+                      SIGUIENTE_ETAPA[
+                        normalizarEstado(proyecto.estado)
+                      ];
 
                     return (
                       <div
@@ -251,22 +363,47 @@ function Produccion() {
                         <div className="mt-3 text-xs text-zinc-500 space-y-1">
                           <div className="flex justify-between">
                             <span>Pagado</span>
+
                             <span>
-                              ${resumenPago.pagado.toLocaleString("es-MX")}
+                              $
+                              {resumenPago.pagado.toLocaleString(
+                                "es-MX"
+                              )}
                             </span>
                           </div>
 
                           <div className="flex justify-between">
                             <span>Saldo</span>
+
                             <span>
-                              ${resumenPago.saldo.toLocaleString("es-MX")}
+                              $
+                              {resumenPago.saldo.toLocaleString(
+                                "es-MX"
+                              )}
                             </span>
                           </div>
                         </div>
 
+                        {siguienteEstado && (
+                          <button
+                            onClick={() =>
+                              avanzarEtapa(proyecto)
+                            }
+                            className="w-full mt-4 bg-green-600 hover:bg-green-700 rounded-xl py-2 font-bold transition"
+                          >
+                            🚀 Avanzar a {siguienteEstado}
+                          </button>
+                        )}
+
+                        {!siguienteEstado && (
+                          <div className="mt-4 text-center text-green-400 font-bold">
+                            ✅ Proceso terminado
+                          </div>
+                        )}
+
                         <Link
                           to={`/proyectos/${proyecto.id}`}
-                          className="block mt-4"
+                          className="block mt-3"
                         >
                           <button className="w-full bg-purple-600 hover:bg-purple-700 rounded-xl py-2 font-bold transition">
                             📂 Abrir
