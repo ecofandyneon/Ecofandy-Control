@@ -188,6 +188,78 @@ function DetalleProyecto() {
     });
   };
 
+  const convertirFecha = (fecha) => {
+    if (!fecha) return null;
+
+    const valorFecha = fecha.toDate
+      ? fecha.toDate()
+      : fecha.seconds
+        ? new Date(fecha.seconds * 1000)
+        : new Date(fecha);
+
+    return Number.isNaN(valorFecha.getTime()) ? null : valorFecha;
+  };
+
+  const formatearDuracion = (milisegundos) => {
+    if (!Number.isFinite(milisegundos) || milisegundos < 0) {
+      return "Sin datos";
+    }
+
+    const minutosTotales = Math.floor(milisegundos / 60000);
+    const dias = Math.floor(minutosTotales / 1440);
+    const horas = Math.floor((minutosTotales % 1440) / 60);
+    const minutos = minutosTotales % 60;
+
+    if (dias > 0) return `${dias} d ${horas} h`;
+    if (horas > 0) return `${horas} h ${minutos} min`;
+    return `${Math.max(minutos, 1)} min`;
+  };
+
+  const historialCronologico = Array.isArray(proyecto?.historialProduccion)
+    ? [...proyecto.historialProduccion].sort((a, b) => {
+        const fechaA = convertirFecha(a.fecha)?.getTime() || 0;
+        const fechaB = convertirFecha(b.fecha)?.getTime() || 0;
+        return fechaA - fechaB;
+      })
+    : [];
+
+  const inicioProduccion =
+    convertirFecha(proyecto?.creadoEn) ||
+    convertirFecha(historialCronologico[0]?.fecha);
+
+  const tiemposPorEtapa = historialCronologico.map(
+    (movimiento, index) => {
+      const fin = convertirFecha(movimiento.fecha);
+
+      const inicio =
+        index === 0
+          ? inicioProduccion
+          : convertirFecha(historialCronologico[index - 1]?.fecha);
+
+      return {
+        etapa: movimiento.estadoAnterior || "Sin etapa",
+        inicio,
+        fin,
+        duracion:
+          inicio && fin ? fin.getTime() - inicio.getTime() : null,
+      };
+    }
+  );
+
+  const ultimoMovimiento =
+    historialCronologico[historialCronologico.length - 1];
+
+  const inicioEtapaActual =
+    convertirFecha(ultimoMovimiento?.fecha) || inicioProduccion;
+
+  const tiempoEtapaActual = inicioEtapaActual
+    ? Date.now() - inicioEtapaActual.getTime()
+    : null;
+
+  const tiempoTotalProduccion = inicioProduccion
+    ? Date.now() - inicioProduccion.getTime()
+    : null;
+
   const guardarCambios = async () => {
     try {
       setGuardando(true);
@@ -511,6 +583,64 @@ function DetalleProyecto() {
           {!cotizacion && (
             <p className="text-red-400 text-sm mt-4">
               ⚠️ Este proyecto no tiene una cotización relacionada.
+            </p>
+          )}
+        </div>
+
+        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-3">
+          <h2 className="text-xl font-bold text-purple-400 mb-4">
+            ⏱️ Tiempos de producción
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5">
+              <p className="text-zinc-500 text-sm">Etapa actual</p>
+              <p className="text-xl font-bold text-purple-300 mt-1">
+                {estado}
+              </p>
+              <p className="text-2xl font-bold text-white mt-3">
+                {formatearDuracion(tiempoEtapaActual)}
+              </p>
+            </div>
+
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-5">
+              <p className="text-zinc-500 text-sm">
+                Tiempo total en producción
+              </p>
+              <p className="text-xl font-bold text-purple-300 mt-1">
+                Desde que se creó el pedido
+              </p>
+              <p className="text-2xl font-bold text-white mt-3">
+                {formatearDuracion(tiempoTotalProduccion)}
+              </p>
+            </div>
+          </div>
+
+          {tiemposPorEtapa.length > 0 ? (
+            <div className="space-y-3">
+              {tiemposPorEtapa.map((registro, index) => (
+                <div
+                  key={`${registro.etapa}-${index}`}
+                  className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2"
+                >
+                  <div>
+                    <p className="font-bold text-zinc-200">
+                      {registro.etapa}
+                    </p>
+                    <p className="text-sm text-zinc-500 mt-1">
+                      Tiempo permanecido en esta etapa
+                    </p>
+                  </div>
+
+                  <span className="text-lg font-bold text-purple-300">
+                    {formatearDuracion(registro.duracion)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-zinc-500">
+              Los tiempos por etapa aparecerán al avanzar el proyecto.
             </p>
           )}
         </div>
