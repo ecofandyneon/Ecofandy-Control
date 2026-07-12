@@ -4,6 +4,8 @@ import {
   getDoc,
   updateDoc,
   arrayUnion,
+  addDoc,
+  collection,
   serverTimestamp,
 } from "firebase/firestore";
 import { Link, useParams } from "react-router-dom";
@@ -27,6 +29,7 @@ function DetalleCotizacion() {
   const [guardandoNotas, setGuardandoNotas] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
   const [guardandoPago, setGuardandoPago] = useState(false);
+  const [convirtiendoPedido, setConvirtiendoPedido] = useState(false);
   const [nuevoPago, setNuevoPago] = useState({
     monto: "",
     metodo: "Transferencia",
@@ -606,6 +609,80 @@ function DetalleCotizacion() {
     }
   };
 
+  const convertirEnPedido = async () => {
+    if (cotizacion?.pedidoId) {
+      alert("Esta cotización ya fue convertida en pedido.");
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `¿Convertir la cotización ${cotizacion.folio} en pedido?\n\nSe conservarán cliente, proyecto, materiales, archivos, notas y pagos.`
+    );
+
+    if (!confirmar) return;
+
+    try {
+      setConvirtiendoPedido(true);
+
+      const pedido = {
+        clienteId: cotizacion.clienteId || "",
+        cliente: nombreCliente || "",
+        whatsapp: whatsappCliente || "",
+        correo: correoCliente || "",
+        proyecto: cotizacion.nombreProyecto || "",
+        nombreProyecto: cotizacion.nombreProyecto || "",
+        descripcion: cotizacion.descripcion || "",
+        tipo: cotizacion.tipo || "",
+        medidas: cotizacion.medidas || { ancho: 0, alto: 0 },
+        estado: "Aprobado",
+        formaPago:
+          saldoPendiente === 0 && precioTotal > 0
+            ? "Liquidado"
+            : totalPagado > 0
+              ? "Anticipo recibido"
+              : "Pago contra entrega",
+        cotizacionId: id,
+        folioCotizacion: cotizacion.folio || "",
+        precioFinal: precioTotal,
+        precioVenta: precioTotal,
+        totalMateriales: Number(cotizacion.totalMateriales || 0),
+        utilidadPorcentaje: Number(cotizacion.utilidadPorcentaje || 0),
+        ganancia: Number(cotizacion.ganancia || 0),
+        manoObra: Number(cotizacion.manoObra || 0),
+        descuento: Number(cotizacion.descuento || 0),
+        materiales: cotizacion.materiales || [],
+        archivos: archivos || [],
+        notasCotizacion: notasCotizacion.trim(),
+        pagos: pagos || [],
+        creadoEn: serverTimestamp(),
+        actualizadoEn: serverTimestamp(),
+      };
+
+      const pedidoRef = await addDoc(collection(db, "proyectos"), pedido);
+
+      await updateDoc(doc(db, "cotizaciones", id), {
+        pedidoId: pedidoRef.id,
+        convertidaEnPedido: true,
+        estado: "Aprobado",
+        actualizadoEn: serverTimestamp(),
+      });
+
+      setCotizacion((actual) => ({
+        ...actual,
+        pedidoId: pedidoRef.id,
+        convertidaEnPedido: true,
+        estado: "Aprobado",
+      }));
+
+      alert("🚀 Cotización convertida en pedido correctamente.");
+    } catch (error) {
+      console.error("Error convirtiendo cotización en pedido:", error);
+      alert("No se pudo convertir la cotización en pedido.");
+    } finally {
+      setConvirtiendoPedido(false);
+    }
+  };
+
   const registrarArchivoSubido = async (archivo) => {
     try {
       const archivoGuardado = {
@@ -679,6 +756,34 @@ function DetalleCotizacion() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-3 bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+            <div>
+              <h2 className="text-xl font-bold text-purple-400">
+                🚀 Convertir cotización en pedido
+              </h2>
+              <p className="text-zinc-500 mt-2">
+                Cuando el cliente apruebe el trabajo, pásalo al flujo de producción sin capturar todo otra vez.
+              </p>
+            </div>
+
+            {cotizacion.pedidoId ? (
+              <div className="bg-green-950/40 border border-green-700/40 text-green-300 font-bold px-5 py-3 rounded-xl">
+                ✅ Ya convertido en pedido
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={convertirEnPedido}
+                disabled={convirtiendoPedido}
+                className="bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold px-6 py-3 rounded-xl transition"
+              >
+                {convirtiendoPedido ? "Convirtiendo..." : "🚀 CONVERTIR EN PEDIDO"}
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="xl:col-span-3 bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
           <h2 className="text-xl font-bold text-purple-400 mb-5">
             📌 Avance del expediente

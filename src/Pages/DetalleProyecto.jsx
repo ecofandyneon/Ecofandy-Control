@@ -1,52 +1,64 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useParams, Link } from "react-router-dom";
 import { db } from "../Services/firebase";
 import Swal from "sweetalert2";
 
+const ESTADOS = [
+  "Aprobado",
+  "Corte",
+  "Armado LED",
+  "Pruebas",
+  "Foto final",
+  "Listo para entrega",
+  "Entregado",
+];
+
+const AVANCE = {
+  Aprobado: 15,
+  Corte: 30,
+  "Armado LED": 50,
+  Pruebas: 70,
+  "Foto final": 85,
+  "Listo para entrega": 95,
+  Entregado: 100,
+};
+
 function DetalleProyecto() {
   const { id } = useParams();
+
   const [proyecto, setProyecto] = useState(null);
+  const [guardando, setGuardando] = useState(false);
 
   const [cliente, setCliente] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [nombreProyecto, setNombreProyecto] = useState("");
   const [descripcion, setDescripcion] = useState("");
 
-  const [estado, setEstado] = useState("Diseño / Render");
+  const [estado, setEstado] = useState("Aprobado");
   const [subtotal, setSubtotal] = useState("");
   const [requiereFactura, setRequiereFactura] = useState(false);
   const [anticipo, setAnticipo] = useState("");
-  const [estadoPago, setEstadoPago] = useState("Cotización pendiente");
-
   const [fechaEntrega, setFechaEntrega] = useState("");
   const [tipoEntrega, setTipoEntrega] = useState("Recoge en taller");
   const [notas, setNotas] = useState("");
-
-  const [promptRender, setPromptRender] = useState("");
-  const [urlRender, setUrlRender] = useState("");
-  const [archivoVector, setArchivoVector] = useState("");
-  const [medidasFinales, setMedidasFinales] = useState("");
-  const [metrosNeon, setMetrosNeon] = useState("");
-  const [materialesEstimados, setMaterialesEstimados] = useState("");
-  const [costoEstimado, setCostoEstimado] = useState("");
-  const [utilidadPorcentaje, setUtilidadPorcentaje] = useState("60");
-  const [observacionesDiseno, setObservacionesDiseno] = useState("");
-
-  const precioSugerido =
-    Number(costoEstimado || 0) +
-    Number(costoEstimado || 0) * (Number(utilidadPorcentaje || 0) / 100);
-
-  const iva = requiereFactura ? Number(subtotal || 0) * 0.16 : 0;
-  const total = Number(subtotal || 0) + iva;
-  const saldo = total - Number(anticipo || 0);
+  const [fotosProceso, setFotosProceso] = useState("");
 
   useEffect(() => {
     const cargarProyecto = async () => {
-      const docRef = doc(db, "proyectos", id);
-      const docSnap = await getDoc(docRef);
+      try {
+        const docRef = doc(db, "proyectos", id);
+        const docSnap = await getDoc(docRef);
 
-      if (docSnap.exists()) {
+        if (!docSnap.exists()) {
+          Swal.fire({
+            icon: "error",
+            title: "Proyecto no encontrado",
+            confirmButtonColor: "#7C3AED",
+          });
+          return;
+        }
+
         const data = { id: docSnap.id, ...docSnap.data() };
 
         setProyecto(data);
@@ -54,65 +66,79 @@ function DetalleProyecto() {
         setWhatsapp(data.whatsapp || "");
         setNombreProyecto(data.proyecto || "");
         setDescripcion(data.descripcion || "");
-        setEstado(data.estado || "Diseño / Render");
 
-        setSubtotal(data.subtotal ?? data.precio ?? "");
-        setRequiereFactura(data.requiereFactura || false);
-        setAnticipo(data.anticipo || "");
-        setEstadoPago(data.estadoPago || "Cotización pendiente");
+        const estadoInicial = ESTADOS.includes(data.estado)
+          ? data.estado
+          : "Aprobado";
 
+        setEstado(estadoInicial);
+        setSubtotal(data.subtotal ?? data.precio ?? data.total ?? "");
+        setRequiereFactura(Boolean(data.requiereFactura));
+        setAnticipo(data.anticipo ?? data.pagado ?? "");
         setFechaEntrega(data.fechaEntrega || "");
         setTipoEntrega(data.tipoEntrega || "Recoge en taller");
-        setNotas(data.notas || "");
-
-        setPromptRender(data.promptRender || "");
-        setUrlRender(data.urlRender || "");
-        setArchivoVector(data.archivoVector || "");
-        setMedidasFinales(data.medidasFinales || "");
-        setMetrosNeon(data.metrosNeon || "");
-        setMaterialesEstimados(data.materialesEstimados || "");
-        setCostoEstimado(data.costoEstimado || "");
-        setUtilidadPorcentaje(data.utilidadPorcentaje || "60");
-        setObservacionesDiseno(data.observacionesDiseno || "");
+        setNotas(data.notasInternas ?? data.notas ?? "");
+        setFotosProceso(data.fotosProceso || "");
+      } catch (error) {
+        console.error(error);
+        Swal.fire({
+          icon: "error",
+          title: "Error",
+          text: "No se pudo cargar el proyecto.",
+          confirmButtonColor: "#7C3AED",
+        });
       }
     };
 
     cargarProyecto();
   }, [id]);
 
-  const aplicarPrecioSugerido = () => {
-    setSubtotal(Math.round(precioSugerido));
-  };
+  const iva = requiereFactura ? Number(subtotal || 0) * 0.16 : 0;
+  const total = Number(subtotal || 0) + iva;
+  const saldo = Math.max(total - Number(anticipo || 0), 0);
+  const avance = AVANCE[estado] ?? 15;
 
-  const generarRenderIA = () => {
-    Swal.fire({
-      icon: "info",
-      title: "Render con IA",
-      text: "Esta sección ya quedó preparada. Después conectaremos la IA de forma segura con Firebase Functions.",
-      confirmButtonColor: "#7C3AED",
-    });
-  };
+  const estadoPago = useMemo(() => {
+    if (total <= 0) return "Pendiente";
+    if (saldo <= 0) return "Liquidado";
+    if (Number(anticipo || 0) > 0) return "Anticipo recibido";
+    return "Pendiente de pago";
+  }, [total, saldo, anticipo]);
+
+  const materialesHeredados =
+    proyecto?.materiales ||
+    proyecto?.materialesEstimados ||
+    proyecto?.detalleMateriales ||
+    "";
+
+  const renderHeredado =
+    proyecto?.renderAprobado ||
+    proyecto?.urlRender ||
+    proyecto?.renderUrl ||
+    "";
+
+  const vectorHeredado =
+    proyecto?.archivoVector ||
+    proyecto?.vector ||
+    proyecto?.vectorUrl ||
+    "";
+
+  const medidasHeredadas =
+    proyecto?.medidasFinales ||
+    proyecto?.medidas ||
+    "";
 
   const guardarCambios = async () => {
     try {
+      setGuardando(true);
+
       await updateDoc(doc(db, "proyectos", id), {
         cliente,
         whatsapp,
         proyecto: nombreProyecto,
         descripcion,
         estado,
-
-        promptRender,
-        urlRender,
-        archivoVector,
-        medidasFinales,
-        metrosNeon,
-        materialesEstimados,
-        costoEstimado: Number(costoEstimado || 0),
-        utilidadPorcentaje: Number(utilidadPorcentaje || 0),
-        precioSugerido: Math.round(precioSugerido),
-        observacionesDiseno,
-
+        avance,
         subtotal: Number(subtotal || 0),
         requiereFactura,
         iva,
@@ -120,21 +146,39 @@ function DetalleProyecto() {
         precio: total,
         anticipo: Number(anticipo || 0),
         saldo,
-        estadoPago:
-          total <= 0
-            ? "Cotización pendiente"
-            : saldo <= 0
-            ? "Liquidado"
-            : estadoPago,
-
+        estadoPago,
         fechaEntrega,
         tipoEntrega,
-        notas,
+        notasInternas: notas,
+        fotosProceso,
       });
+
+      setProyecto((actual) => ({
+        ...actual,
+        cliente,
+        whatsapp,
+        proyecto: nombreProyecto,
+        descripcion,
+        estado,
+        avance,
+        subtotal: Number(subtotal || 0),
+        requiereFactura,
+        iva,
+        total,
+        precio: total,
+        anticipo: Number(anticipo || 0),
+        saldo,
+        estadoPago,
+        fechaEntrega,
+        tipoEntrega,
+        notasInternas: notas,
+        fotosProceso,
+      }));
 
       Swal.fire({
         icon: "success",
         title: "Proyecto actualizado",
+        text: "Los cambios de producción quedaron guardados.",
         confirmButtonColor: "#7C3AED",
       });
     } catch (error) {
@@ -146,12 +190,13 @@ function DetalleProyecto() {
         text: "No se pudieron guardar los cambios.",
         confirmButtonColor: "#7C3AED",
       });
+    } finally {
+      setGuardando(false);
     }
   };
 
   const marcarLiquidado = () => {
     setAnticipo(total);
-    setEstadoPago("Liquidado");
   };
 
   if (!proyecto) {
@@ -160,209 +205,218 @@ function DetalleProyecto() {
 
   return (
     <div>
-      <Link to="/proyectos" className="text-purple-400 hover:text-purple-300">
+      <Link
+        to="/proyectos"
+        className="text-purple-400 hover:text-purple-300"
+      >
         ← Volver a proyectos
       </Link>
 
-      <div className="flex justify-between items-start mt-6 mb-8">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4 mt-6 mb-8">
         <div>
           <h1 className="text-4xl font-bold text-purple-500">
-            {proyecto.codigo || "Sin código"}
+            {proyecto.codigo || "Sin código"} · {nombreProyecto || "Proyecto"}
           </h1>
-          <p className="text-zinc-400 mt-2">Centro del proyecto</p>
+          <p className="text-zinc-400 mt-2">
+            {cliente || "Sin cliente"} · Centro de producción
+          </p>
         </div>
 
-        <span className="bg-purple-600/20 text-purple-300 px-4 py-2 rounded-full">
+        <span className="bg-purple-600/20 text-purple-300 px-4 py-2 rounded-full font-bold">
           {estado}
         </span>
+      </div>
+
+      <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 mb-6">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-xl font-bold text-purple-400">
+            📌 Avance de producción
+          </h2>
+          <span className="font-bold text-purple-300">{avance}%</span>
+        </div>
+
+        <p className="text-zinc-400 text-sm mb-3">{estado}</p>
+
+        <div className="w-full bg-zinc-700 rounded-full h-3 overflow-hidden">
+          <div
+            className="bg-purple-500 h-3 rounded-full transition-all duration-500"
+            style={{ width: `${avance}%` }}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
           <h2 className="text-xl font-bold text-purple-400 mb-4">
-            Información
+            👤 Pedido
           </h2>
 
+          <label className="text-zinc-400 text-sm">Cliente</label>
           <input
-            className="input mb-4"
+            className="input mt-2 mb-4"
             value={cliente}
             onChange={(e) => setCliente(e.target.value)}
-            placeholder="Cliente"
           />
 
+          <label className="text-zinc-400 text-sm">WhatsApp</label>
           <input
-            className="input mb-4"
+            className="input mt-2 mb-4"
             value={whatsapp}
             onChange={(e) => setWhatsapp(e.target.value)}
-            placeholder="WhatsApp"
           />
 
+          <label className="text-zinc-400 text-sm">Trabajo</label>
           <input
-            className="input mb-4"
+            className="input mt-2 mb-4"
             value={nombreProyecto}
             onChange={(e) => setNombreProyecto(e.target.value)}
-            placeholder="Nombre del trabajo"
+          />
+
+          <label className="text-zinc-400 text-sm">Medidas</label>
+          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mt-2 text-zinc-200">
+            {typeof medidasHeredadas === "object" && medidasHeredadas !== null
+         ? `${medidasHeredadas.ancho || 0} × ${
+             medidasHeredadas.alto || 0
+            } cm`
+          : medidasHeredadas || "Sin medidas registradas"}
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-2">
+          <h2 className="text-xl font-bold text-purple-400 mb-4">
+            🏭 Producción
+          </h2>
+
+          <label className="text-zinc-400 text-sm">Estado actual</label>
+          <select
+            className="input mt-2 mb-4"
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+          >
+            {ESTADOS.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-zinc-400 text-sm">
+                Fecha estimada de entrega
+              </label>
+              <input
+                className="input mt-2"
+                type="date"
+                value={fechaEntrega}
+                onChange={(e) => setFechaEntrega(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="text-zinc-400 text-sm">Tipo de entrega</label>
+              <select
+                className="input mt-2"
+                value={tipoEntrega}
+                onChange={(e) => setTipoEntrega(e.target.value)}
+              >
+                <option>Recoge en taller</option>
+                <option>Entrega local</option>
+                <option>Envío</option>
+                <option>Instalación</option>
+              </select>
+            </div>
+          </div>
+
+          <label className="text-zinc-400 text-sm block mt-4">
+            Fotos / enlaces del proceso
+          </label>
+          <textarea
+            className="input min-h-28 mt-2"
+            value={fotosProceso}
+            onChange={(e) => setFotosProceso(e.target.value)}
+            placeholder="Pega aquí enlaces o referencias de fotos del corte, armado, pruebas y producto final."
           />
         </div>
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-2">
           <h2 className="text-xl font-bold text-purple-400 mb-4">
-            🎨 Diseño, Render, Vector y Cotización
+            📦 Expediente heredado de la cotización
           </h2>
 
-          <label className="text-zinc-400 text-sm">Prompt para render con IA</label>
-          <textarea
-            className="input min-h-24 mt-2 mb-4"
-            value={promptRender}
-            onChange={(e) => setPromptRender(e.target.value)}
-            placeholder="Ej. Render de letrero neón cálido sobre acrílico transparente..."
-          />
-
-          <button
-            type="button"
-            onClick={generarRenderIA}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl mb-4"
-          >
-            ✨ Generar render con IA
-          </button>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-zinc-400 text-sm">URL o nombre del render</label>
-              <input
-                className="input mt-2"
-                value={urlRender}
-                onChange={(e) => setUrlRender(e.target.value)}
-                placeholder="Render aprobado / enlace / archivo"
-              />
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+              <p className="text-zinc-400 text-sm mb-2">Render aprobado</p>
+              <p className="text-zinc-200 break-all">
+                {renderHeredado || "Sin render registrado"}
+              </p>
             </div>
 
-            <div>
-              <label className="text-zinc-400 text-sm">Archivo vector</label>
-              <input
-                className="input mt-2"
-                value={archivoVector}
-                onChange={(e) => setArchivoVector(e.target.value)}
-                placeholder="CDR, SVG, AI, DXF..."
-              />
-            </div>
-
-            <div>
-              <label className="text-zinc-400 text-sm">Medidas finales</label>
-              <input
-                className="input mt-2"
-                value={medidasFinales}
-                onChange={(e) => setMedidasFinales(e.target.value)}
-                placeholder="Ej. 120 x 60 cm"
-              />
-            </div>
-
-            <div>
-              <label className="text-zinc-400 text-sm">Metros estimados de neón</label>
-              <input
-                className="input mt-2"
-                type="number"
-                value={metrosNeon}
-                onChange={(e) => setMetrosNeon(e.target.value)}
-                placeholder="Ej. 8.5"
-              />
-            </div>
-
-            <div>
-              <label className="text-zinc-400 text-sm">
-                Costo estimado de materiales
-              </label>
-              <input
-                className="input mt-2"
-                type="number"
-                value={costoEstimado}
-                onChange={(e) => setCostoEstimado(e.target.value)}
-                placeholder="Ej. 1500"
-              />
-            </div>
-
-            <div>
-              <label className="text-zinc-400 text-sm">Utilidad %</label>
-              <input
-                className="input mt-2"
-                type="number"
-                value={utilidadPorcentaje}
-                onChange={(e) => setUtilidadPorcentaje(e.target.value)}
-                placeholder="Ej. 60"
-              />
+            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
+              <p className="text-zinc-400 text-sm mb-2">Archivo vector</p>
+              <p className="text-zinc-200 break-all">
+                {vectorHeredado || "Sin vector registrado"}
+              </p>
             </div>
           </div>
 
-          <textarea
-            className="input min-h-28 mt-4"
-            value={materialesEstimados}
-            onChange={(e) => setMaterialesEstimados(e.target.value)}
-            placeholder="Materiales estimados: neón, acrílico, fuente, vinil, aluminio, etc."
-          />
-
-          <textarea
-            className="input min-h-28 mt-4"
-            value={observacionesDiseno}
-            onChange={(e) => setObservacionesDiseno(e.target.value)}
-            placeholder="Observaciones del render, vector o diseño aprobado."
-          />
-
           <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mt-4">
-            <p className="text-zinc-400 text-sm">Precio sugerido</p>
-            <p className="text-3xl font-bold text-green-400">
-              ${Math.round(precioSugerido).toLocaleString("es-MX")}
+            <p className="text-zinc-400 text-sm mb-2">
+              Materiales / información técnica
             </p>
+            <p className="text-zinc-200 whitespace-pre-wrap">
+              {Array.isArray(materialesHeredados)
+                ? materialesHeredados
+                 .map(
+              (material) =>
+               `${material.nombre || "Material"}${
+                material.descripcionCantidad
+              ? ` · ${material.descripcionCantidad}`
+              : ""
+          }`
+      )
+      .join("\n")
+  : materialesHeredados || "Sin materiales registrados"}
+            </p>
+          </div>
 
-            <button
-              type="button"
-              onClick={aplicarPrecioSugerido}
-              className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-xl"
-            >
-              Aplicar como subtotal
-            </button>
+          <div className="mt-4">
+            <label className="text-zinc-400 text-sm">Descripción del trabajo</label>
+            <textarea
+              className="input min-h-32 mt-2"
+              value={descripcion}
+              onChange={(e) => setDescripcion(e.target.value)}
+            />
           </div>
         </div>
 
         <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
           <h2 className="text-xl font-bold text-purple-400 mb-4">
-            Finanzas
+            💰 Pago
           </h2>
 
-          <label className="text-zinc-400 text-sm">Subtotal</label>
-          <input
-            className="input mt-2 mb-4"
-            type="number"
-            value={subtotal}
-            onChange={(e) => setSubtotal(e.target.value)}
-          />
+          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-4 space-y-3">
+            <div className="flex justify-between gap-4">
+              <span className="text-zinc-400">Subtotal</span>
+              <strong>${Number(subtotal || 0).toLocaleString("es-MX")}</strong>
+            </div>
 
-          <label className="flex items-center gap-3 text-zinc-300 font-semibold bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-4">
-            <input
-              type="checkbox"
-              checked={requiereFactura}
-              onChange={(e) => setRequiereFactura(e.target.checked)}
-            />
-            Requiere factura (+16% IVA)
-          </label>
-
-          <div className="bg-zinc-950 rounded-xl p-4 space-y-2 border border-zinc-800 mb-4">
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-4">
               <span className="text-zinc-400">IVA</span>
               <strong>${iva.toLocaleString("es-MX")}</strong>
             </div>
 
-            <div className="flex justify-between">
-              <span className="text-zinc-400">Total</span>
+            <div className="flex justify-between gap-4 border-t border-zinc-800 pt-3">
+              <span className="text-zinc-300">Total</span>
               <strong className="text-green-400">
                 ${total.toLocaleString("es-MX")}
               </strong>
             </div>
           </div>
 
-          <label className="text-zinc-400 text-sm">Anticipo / Pagado</label>
+          <label className="text-zinc-400 text-sm">Anticipo / pagado</label>
           <input
             className="input mt-2 mb-4"
             type="number"
+            min="0"
             value={anticipo}
             onChange={(e) => setAnticipo(e.target.value)}
           />
@@ -370,20 +424,18 @@ function DetalleProyecto() {
           <div className="bg-purple-600/20 text-purple-300 rounded-xl p-4 mb-4">
             <p className="text-sm">Saldo pendiente</p>
             <p className="text-3xl font-bold">
-              ${Math.max(saldo, 0).toLocaleString("es-MX")}
+              ${saldo.toLocaleString("es-MX")}
             </p>
           </div>
 
           <p
             className={`font-bold mb-4 ${
-              saldo <= 0 && total > 0 ? "text-green-400" : "text-yellow-400"
+              estadoPago === "Liquidado"
+                ? "text-green-400"
+                : "text-yellow-400"
             }`}
           >
-            {total <= 0
-              ? "Cotización pendiente"
-              : saldo <= 0
-              ? "Liquidado"
-              : estadoPago}
+            {estadoPago}
           </p>
 
           <button
@@ -395,77 +447,26 @@ function DetalleProyecto() {
           </button>
         </div>
 
-        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
+        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-3">
           <h2 className="text-xl font-bold text-purple-400 mb-4">
-            Producción y entrega
-          </h2>
-
-          <select
-            className="input mb-4"
-            value={estado}
-            onChange={(e) => setEstado(e.target.value)}
-          >
-            <option>Idea recibida</option>
-            <option>Diseño / Render</option>
-            <option>Aprobado</option>
-            <option>Corte</option>
-            <option>Armado LED</option>
-            <option>Pruebas</option>
-            <option>Finalizado</option>
-            <option>Empaque</option>
-            <option>Entregado</option>
-            <option>Liquidado</option>
-          </select>
-
-          <input
-            className="input mb-4"
-            type="date"
-            value={fechaEntrega}
-            onChange={(e) => setFechaEntrega(e.target.value)}
-          />
-
-          <select
-            className="input"
-            value={tipoEntrega}
-            onChange={(e) => setTipoEntrega(e.target.value)}
-          >
-            <option>Recoge en taller</option>
-            <option>Entrega local</option>
-            <option>Envío</option>
-            <option>Instalación</option>
-          </select>
-        </div>
-
-        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6 xl:col-span-2">
-          <h2 className="text-xl font-bold text-purple-400 mb-4">
-            Descripción
+            📝 Notas internas de producción
           </h2>
 
           <textarea
-            className="input min-h-32"
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
-          />
-        </div>
-
-        <div className="bg-zinc-900 border border-purple-700/40 rounded-2xl p-6">
-          <h2 className="text-xl font-bold text-purple-400 mb-4">
-            Notas internas
-          </h2>
-
-          <textarea
-            className="input min-h-32"
+            className="input min-h-36"
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
+            placeholder="Pendientes, cambios, detalles de fabricación, observaciones para corte, armado o entrega..."
           />
         </div>
       </div>
 
       <button
         onClick={guardarCambios}
-        className="mt-8 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl"
+        disabled={guardando}
+        className="mt-8 w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold py-4 rounded-xl"
       >
-        💜 Guardar cambios
+        {guardando ? "Guardando..." : "💜 Guardar cambios de producción"}
       </button>
     </div>
   );
